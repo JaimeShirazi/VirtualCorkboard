@@ -1,0 +1,36 @@
+// Each #kernel tells which function to compile; you can have many kernels
+#pragma kernel CSMain
+
+RWStructuredBuffer<float4> links;
+RWStructuredBuffer<float> hits;
+int offset;
+int total;
+
+[numthreads(64,1,1)]
+void CSMain (uint3 id : SV_DispatchThreadID)
+{
+    // I sure hope this math works the way I expect
+    int intercardIndex = id.x / offset;
+    int cardIndex = id.x % offset;
+    
+    float4 AB = links[intercardIndex];
+    float4 CD = links[cardIndex];
+    
+    float r = (AB.y - CD.y) * (CD.z - CD.x) - (AB.x - CD.x) * (CD.w - CD.y) /
+        (AB.z - AB.x) * (CD.w - CD.y) - (AB.w - AB.y) * (CD.z - CD.x);
+    
+    float s = (AB.y - CD.y) * (AB.z - AB.x) - (AB.x - CD.x) * (AB.w - AB.y) /
+        (AB.z - AB.x) * (CD.w - CD.y) - (AB.w - AB.y) * (CD.z - CD.x);
+    
+    float hitResult = max(
+        (float)(r >= 0 && r <= 1 && s >= 0 && s <= 1),
+        (float)(AB.xy == CD.xy || AB.xy == CD.zw || AB.zw == CD.zw)
+        );
+    
+    hits[intercardIndex] = max(
+        hits[intercardIndex],
+        hitResult
+        );
+    
+    hits[intercardIndex] += (AB.xy == CD.xy || AB.xy == CD.zw || AB.zw == CD.zw);
+}

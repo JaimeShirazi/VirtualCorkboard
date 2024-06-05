@@ -1,6 +1,7 @@
+using Unity.Mathematics;
 using UnityEngine;
 
-public abstract class NodeLink
+public class NodeLink
 {
     public readonly Node start;
     public Vector3 StartPos
@@ -12,6 +13,10 @@ public abstract class NodeLink
     {
         get { return end.position; }
     }
+    public static explicit operator float4(NodeLink link)
+    {
+        return new float4(link.StartPos.x, link.StartPos.y, link.EndPos.x, link.EndPos.y);
+    }
     //Leaving this public as it will be calculated by our compute shader
     public float distance;
     public NodeLink(Node a, Node b)
@@ -22,15 +27,5 @@ public abstract class NodeLink
     /// <summary>
     /// Whether this link can be destroyed due to an intersection or not
     /// </summary>
-    public abstract bool IsFixed { get; }
-}
-public class StaticNodeLink : NodeLink
-{
-    public StaticNodeLink(Node a, Node b) : base(a, b) { }
-    public override bool IsFixed { get { return true; } }
-}
-public class DynamicNodeLink : NodeLink
-{
-    public DynamicNodeLink(Node a, Node b) : base(a, b) { }
-    public override bool IsFixed { get { return false; } }
+    public bool IsFixed { get; }
 }

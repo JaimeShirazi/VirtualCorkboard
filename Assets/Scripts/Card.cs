@@ -29,13 +29,13 @@ public class Card
         // -- GENERATE THE CORNER NODES --
         cornerNodes = new Node[4];
         //Top left
-        cornerNodes[0] = new Node(new Vector2(shape.xMin, shape.yMax));
+        cornerNodes[0] = new Node(new Vector2(shape.xMin, shape.yMax), this, false);
         //Top right
-        cornerNodes[1] = new Node(new Vector2(shape.xMax, shape.yMax));
+        cornerNodes[1] = new Node(new Vector2(shape.xMax, shape.yMax), this, false);
         //Bottom left
-        cornerNodes[2] = new Node(new Vector2(shape.xMin, shape.yMin));
+        cornerNodes[2] = new Node(new Vector2(shape.xMin, shape.yMin), this, false);
         //Bttom right
-        cornerNodes[3] = new Node(new Vector2(shape.xMax, shape.yMin));
+        cornerNodes[3] = new Node(new Vector2(shape.xMax, shape.yMin), this, false);
 
         links = new();
         linksTargetEdge = new();
@@ -198,13 +198,13 @@ public class Card
                     //A value between 0 to 1 representing where along the edge this node should be distributed
                     float distribution = (i + 1) / (float)(orderedLinksBuffer.Length + 1);
                     //Create a new node at a position along the edge based on order
-                    pinNodes[links.IndexOf(orderedLinksBuffer[i])] = new Node(PinPositionCalculator(edge, distribution));
+                    pinNodes[links.IndexOf(orderedLinksBuffer[i])] = new Node(PinPositionCalculator(edge, distribution), this, true);
                 }
             }
             else //if there are no pins on this side
             {
-                //Create a static link along the edge of this card
-                cornerLinks.Add(new StaticNodeLink(GetFirstCornerNode(edge), GetLastCornerNode(edge)));
+                //Create a link along the edge of this card
+                cornerLinks.Add(new NodeLink(GetFirstCornerNode(edge), GetLastCornerNode(edge)));
             }
         }
 

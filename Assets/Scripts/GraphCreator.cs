@@ -1,10 +1,16 @@
 using System.Collections;
+using System.Collections.Generic;
 using UnityEngine;
 
 public class GraphCreator : MonoBehaviour
 {
+    public ComputeShader shader;
+
+    public GameObject spherePrefab;
+    private List<Transform> spheres = new();
+
     NodeGraph graph = new();
-    IEnumerator Start() //fun trick, you can make start an IEnumerator and it will work properly :)
+    void Start()
     {
         Card cardA = new Card(new Rect(0, 0, 1, 2));
         Card cardB = new Card(new Rect(2, 3, 0.8f, 3f));
@@ -15,14 +21,19 @@ public class GraphCreator : MonoBehaviour
         graph.AddLink(cardA, cardB);
         graph.AddLink(cardB, cardC);
         graph.Build();
-
-        yield return new WaitForSeconds(1);
-
-        graph.RemoveLink(cardB, cardC); //this one should be the link between top right and bottom left
-        graph.Build();
+        graph.RunComputeShader(shader);
     }
     void Update()
     {
-        graph.Render();
+        graph.DebugRender();
+        Vector3[] debugPos = graph.DebugNodePositions();
+        for (int i = 0; i < debugPos.Length; i++)
+        {
+            if (i >= spheres.Count)
+            {
+                spheres.Add(Instantiate(spherePrefab).transform);
+            }
+            spheres[i].position = debugPos[i];
+        }
     }
 }
