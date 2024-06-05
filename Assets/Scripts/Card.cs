@@ -4,9 +4,26 @@ using UnityEngine;
 
 public class Card
 {
+    private static int maxID; //Make sure to change this data type if you need more than 2 billion cards at a time lmao
+    private int thisID;
+    /// <summary>
+    /// <para>An order-irrespective value representing two cards.</para>
+    /// <para>This code was slightly modified from a stackoverflow answer available here: https://stackoverflow.com/a/4226345</para>
+    /// </summary>
+    /// <returns>A 64-bit value representing two cards that will always be the same, regardless of the order of the cards</returns>
+    public static ulong GetCardPairID(Card a, Card b)
+    {
+        ulong id = a.thisID > b.thisID ? (uint)b.thisID | ((ulong)a.thisID << 32) :
+                                         (uint)a.thisID | ((ulong)b.thisID << 32);
+        return id;
+    }
+
     Rect shape;
     public Card(Rect rect)
     {
+        //Assign this card's ID, increment the static counter by 1 for the next card
+        thisID = maxID; maxID++;
+
         shape = rect;
 
         // -- GENERATE THE CORNER NODES --
