@@ -1,7 +1,5 @@
-using System.Collections;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
-using Unity.VisualScripting;
 using UnityEngine;
 
 public class Node
@@ -49,6 +47,25 @@ public class DynamicNodeLink : NodeLink
 public class Card
 {
     Rect shape;
+    public Card(Rect rect)
+    {
+        shape = rect;
+
+        // -- GENERATE THE CORNER NODES --
+        cornerNodes = new Node[4];
+        //Top left
+        cornerNodes[0] = new Node(new Vector2(shape.xMin, shape.yMax));
+        //Top right
+        cornerNodes[1] = new Node(new Vector2(shape.xMax, shape.yMax));
+        //Bottom left
+        cornerNodes[2] = new Node(new Vector2(shape.xMin, shape.yMin));
+        //Bttom right
+        cornerNodes[3] = new Node(new Vector2(shape.xMax, shape.yMin));
+
+        links = new();
+        linksTargetEdge = new();
+        cornerLinks = new();
+    }
     enum Edge
     {
         North, East, South, West
@@ -57,6 +74,8 @@ public class Card
     List<Edge> linksTargetEdge;
     public void AddLink(Card to)
     {
+        if (to == this) return;
+
         Edge targetEdgeBuffer = Edge.North;
         //TODO: Implement logic for calculating the target edge based on the position of the card relative to this card
         Debug.LogWarning("Logic for calculating target edge for pin has not been implemented!");
@@ -64,24 +83,50 @@ public class Card
 
         links.Add(to);
 
-        GenerateCores();
+        dataIsStale = true; //Internally mark that this card needs its data regenerated before being read by other objects
     }
     public void RemoveLink(Card to)
     {
-        linksTargetEdge.RemoveAt(links.IndexOf(to));
-        links.Remove(to);
+        int targetIndex = links.IndexOf(to);
+        if (targetIndex < 0) return;
 
-        GenerateCores();
+        links.RemoveAt(targetIndex);
+        linksTargetEdge.RemoveAt(targetIndex);
+
+        dataIsStale = true; //Internally mark that this card needs its data regenerated before being read by other objects
     }
-    public Card(Rect rect)
+    Node[] cornerNodes;
+    public Node[] CornerNodes
     {
-        shape = rect;
-        links = new();
-        linksTargetEdge = new();
-        coreLinks = new();
+        get
+        {
+            StaleDataCheck();
+            return cornerNodes;
+        }
     }
-    Node[] coreNodes;
-    List<NodeLink> coreLinks;
+    Node[] pinNodes;
+    public Node[] PinNodes
+    {
+        get
+        {
+            StaleDataCheck();
+            return pinNodes;
+        }
+    }
+    List<NodeLink> cornerLinks;
+    public ReadOnlyCollection<NodeLink> AllNodeLinks
+    {
+        get
+        {
+            StaleDataCheck();
+            return cornerLinks.AsReadOnly();
+        }
+    }
+    public Node GetLinkingNode(Card target)
+    {
+        StaleDataCheck();
+        return pinNodes[links.IndexOf(target)];
+    }
     /// <param name="side">Which edge to get the ordered cards from</param>
     /// <returns>An ordered list of cards for the given edge (left to right or top to bottom)</returns>
     Card[] GetOrderedLinksFromEdge(Edge side)
@@ -124,40 +169,44 @@ public class Card
                     Mathf.Lerp(shape.yMax, shape.yMin, distribution));
         }
     }
+    /// <summary>
+    /// Used to make the code in GeneratePinsAndLinks edge-type-generic.
+    /// </summary>
+    /// <param name="edge">Which edge we need the first corner of</param>
+    /// <returns>The leftmost/topmost corner node, depending on the edge</returns>
     Node GetFirstCornerNode(Edge edge)
     {
         switch (edge)
         {
             default:
-            case Edge.North: return coreNodes[0];
-            case Edge.East: return coreNodes[1];
-            case Edge.South: return coreNodes[2];
-            case Edge.West: return coreNodes[0];
+            case Edge.North: return cornerNodes[0];
+            case Edge.East: return cornerNodes[1];
+            case Edge.South: return cornerNodes[2];
+            case Edge.West: return cornerNodes[0];
         }
     }
+    /// <summary>
+    /// Used to make the code in GeneratePinsAndLinks edge-type-generic.
+    /// </summary>
+    /// <param name="edge">Which edge we need the last corner of</param>
+    /// <returns>The rightmost/bottommost corner node, depending on the edge</returns>
     Node GetLastCornerNode(Edge edge)
     {
         switch (edge)
         {
             default:
-            case Edge.North: return coreNodes[1];
-            case Edge.East: return coreNodes[3];
-            case Edge.South: return coreNodes[3];
-            case Edge.West: return coreNodes[2];
+            case Edge.North: return cornerNodes[1];
+            case Edge.East: return cornerNodes[3];
+            case Edge.South: return cornerNodes[3];
+            case Edge.West: return cornerNodes[2];
         }
     }
-    void GenerateCores()
+    /// <summary>
+    /// Generates the pin nodes and links necessary
+    /// </summary>
+    void GeneratePinsAndLinks()
     {
-        coreNodes = new Node[4 + links.Count];
-        // -- GENERATE THE CORNER NODES --
-        //Top left
-        coreNodes[0] = new Node(new Vector2(shape.xMin, shape.yMax));
-        //Top right
-        coreNodes[1] = new Node(new Vector2(shape.xMax, shape.yMax));
-        //Bottom left
-        coreNodes[2] = new Node(new Vector2(shape.xMin, shape.yMin));
-        //Bttom right
-        coreNodes[3] = new Node(new Vector2(shape.xMax, shape.yMin));
+        pinNodes = new Node[links.Count];
 
         Edge[] allEdges = System.Enum.GetValues(typeof(Edge)) as Edge[];
         Card[] orderedLinksBuffer;
@@ -174,67 +223,97 @@ public class Card
                     //A value between 0 to 1 representing where along the edge this node should be distributed
                     float distribution = (i + 1) / (float)(orderedLinksBuffer.Length + 1);
                     //Create a new node at a position along the edge based on order
-                    coreNodes[4 + links.IndexOf(orderedLinksBuffer[i])] = new Node(PinPositionCalculator(edge, distribution));
+                    pinNodes[links.IndexOf(orderedLinksBuffer[i])] = new Node(PinPositionCalculator(edge, distribution));
                 }
             }
             else //if there are no pins on this side
             {
                 //Create a static link along the edge of this card
-                coreLinks.Add(new StaticNodeLink(GetFirstCornerNode(edge), GetLastCornerNode(edge)));
+                cornerLinks.Add(new StaticNodeLink(GetFirstCornerNode(edge), GetLastCornerNode(edge)));
             }
         }
+
+        dataIsStale = false; //Internally mark this card as having up-to-date nodes and links
     }
-    public Node GetLinkingNode(Card target)
+    /// <summary>
+    /// Has the node layout changed since the card last buffered data? This will prevent the card from processing until it is done recieving links.
+    /// </summary>
+    private bool dataIsStale = true;
+    /// <summary>
+    /// Checks if the data generated by the card is out of date, and regenerates it if it is.
+    /// </summary>
+    void StaleDataCheck()
     {
-        return coreNodes[4 + links.IndexOf(target)];
-    }
-    public Node[] AllNodes
-    {
-        get { return coreNodes; }
-    }
-    public ReadOnlyCollection<NodeLink> AllNodeLinks
-    {
-        get { return coreLinks.AsReadOnly(); }
+        if (dataIsStale)
+            GeneratePinsAndLinks();
     }
 }
 public class NodeGraph
 {
-    public List<NodeLink> links = new();
-    public List<Node> nodes = new();
+    /// <summary>
+    /// The cards in this nodegraph
+    /// </summary>
+    List<Card> cards = new();
 
-    private List<Card> cards = new();
+    /// <summary>
+    /// A buffer that collects and stores the nodes. The nodegraph should never need to generate its own nodes.
+    /// </summary>
+    List<Node> nodesBuffer = new();
+    /// <summary>
+    /// A collection of all the static links generated by the cards. None of these should be generated by nodegraph.
+    /// </summary>
+    List<NodeLink> cardLinks = new();
+    /// <summary>
+    /// All the dynamic links between pins generated by the node graph.
+    /// </summary>
+    List<NodeLink> pinLinks = new();
+    /// <summary>
+    /// Clear the data that the nodegraph itself generated.
+    /// </summary>
     public void Clear()
     {
-        nodes.Clear();
-        links.Clear();
+        pinLinks.Clear();
     }
+    /// <summary>
+    /// Adds a given card object to this node graph
+    /// </summary>
     public void AddCard(Card target)
     {
         cards.Add(target);
     }
     public void AddLink(Card from, Card to)
     {
+        //Add the links on each of the cards (so they can generate the necessary pin nodes)
         from.AddLink(to);
         to.AddLink(from);
 
-        links.Add(new DynamicNodeLink(
-            from.GetLinkingNode(to),
-            to.GetLinkingNode(from)
+        //Generates the dynamic link (link that *can* be culled by collisions) between the two cards that were just linked.
+        pinLinks.Add(new DynamicNodeLink(
+            from.GetLinkingNode(to), //Get the node on the "from" card that represents the pin that will be connected to "to"
+            to.GetLinkingNode(from) //Get the node on the "to" card that represents the pin that will be connected to "from"
             ));
     }
     public void Build()
     {
+        //Clear previously buffered data
+        nodesBuffer.Clear();
+        cardLinks.Clear();
         foreach (Card card in cards)
         {
-            nodes.AddRange(card.AllNodes);
-            links.AddRange(card.AllNodeLinks);
+            nodesBuffer.AddRange(card.CornerNodes);
+            nodesBuffer.AddRange(card.PinNodes);
+            cardLinks.AddRange(card.AllNodeLinks);
         }
     }
     public void Render()
     {
-        foreach (NodeLink link in links)
+        foreach (NodeLink cardLink in cardLinks)
         {
-            Debug.DrawLine(link.StartPos, link.EndPos, Color.blue, 1);
+            Debug.DrawLine(cardLink.StartPos, cardLink.EndPos, Color.blue);
+        }
+        foreach (NodeLink pinLink in pinLinks)
+        {
+            Debug.DrawLine(pinLink.StartPos, pinLink.EndPos, Color.red);
         }
     }
 }
@@ -243,7 +322,6 @@ public class AStarPathfinder : MonoBehaviour
     NodeGraph graph = new();
     void Start()
     {
-        graph.Clear();
         Card cardA = new Card(new Rect(0, 0, 1, 2));
         Card cardB = new Card(new Rect(2, 3, 0.8f, 3f));
         Card cardC = new Card(new Rect(-4, -1, 2.3f, 1.1f));
