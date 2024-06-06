@@ -1,3 +1,4 @@
+using System.Collections;
 using System.Collections.Generic;
 using Unity.Mathematics;
 using UnityEditor.ShaderGraph.Internal;
@@ -111,7 +112,7 @@ public class NodeGraph
         }
 
         //Temporarily moving the logic out of the shader to ensure that the actual logic is correct
-        for (int id = 0; id < Mathf.CeilToInt(linkArray.Length / 64f); id++)
+        for (int id = 0; id < linkArray.Length; id++)
         {
             int intercardIndex = id / offset;
             int cardIndex = id % offset;
@@ -137,10 +138,16 @@ public class NodeGraph
                 hitResult
                 );
         }
+        cullIntercardLinks = new bool[intercardLinks.Count];
         for (int i = 0; i < hitsArray.Length; i++)
         {
             cullIntercardLinks[i] = hitsArray[i] > 0 ? true : false;
         }
+
+        //remove
+        debugOffsetBuffer = offset;
+        debugTotalBuffer = total;
+        debugLinkArrayBuffer = linkArray;
 
         /*ComputeBuffer linkBuffer = new ComputeBuffer(linkArray.Length, sizeof(float) * 4);
         linkBuffer.SetData(linkArray);
@@ -163,6 +170,41 @@ public class NodeGraph
         linkBuffer.Dispose();
         hitBuffer.Dispose();*/
     }
+    int debugOffsetBuffer;
+    int debugTotalBuffer;
+    float4[] debugLinkArrayBuffer;
+    public IEnumerator DebugShaderOneAtATime()
+    {
+        //Temporarily moving the logic out of the shader to ensure that the actual logic is correct
+        for (int id = 0; id < debugLinkArrayBuffer.Length; id++)
+        {
+
+            int intercardIndex = id / debugOffsetBuffer;
+            int cardIndex = id % debugOffsetBuffer;
+
+            Vector2 A = new Vector2(debugLinkArrayBuffer[intercardIndex].x, debugLinkArrayBuffer[intercardIndex].y);
+            Vector2 B = new Vector2(debugLinkArrayBuffer[intercardIndex].z, debugLinkArrayBuffer[intercardIndex].w);
+            Vector2 C = new Vector2(debugLinkArrayBuffer[cardIndex].x, debugLinkArrayBuffer[cardIndex].y);
+            Vector2 D = new Vector2(debugLinkArrayBuffer[cardIndex].z, debugLinkArrayBuffer[cardIndex].w);
+
+            float r = (A.y - C.y) * (D.x - C.x) - (A.x - C.x) * (D.y - C.y) /
+                (B.x - A.x) * (D.y - C.y) - (B.y - A.y) * (D.x - C.x);
+
+            float s = (A.y - C.y) * (B.x - A.x) - (A.x - C.x) * (B.y - A.y) /
+                (B.x - A.x) * (D.y - C.y) - (B.y - A.y) * (D.x - C.x);
+
+            float hitResult = Mathf.Max(
+                (r >= 0 && r <= 1 && s >= 0 && s <= 1) ? 1f : 0f,
+                ((A == C) || (A == D) || (B == D)) ? 1f : 0f
+                );
+
+            Debug.Log(hitResult > 0f ? "hit" : "no");
+            Debug.DrawLine(A, B, hitResult > 0f ? Color.white : Color.green, 0.5f);
+            Debug.DrawLine(C, D, hitResult > 0f ? Color.white : Color.green, 0.5f);
+
+            yield return new WaitForSeconds(0.5f);
+        }
+    }
     public void DebugRender()
     {
         foreach (NodeLink cardLink in cardLinks)
@@ -173,7 +215,7 @@ public class NodeGraph
         {
             Debug.DrawLine(pinLink.StartPos, pinLink.EndPos, Color.red);
         }
-        for (int i = 0; i < intercardLinks.Count; i++)
+        /*for (int i = 0; i < intercardLinks.Count; i++)
         {
             if (cullIntercardLinks != null)
             {
@@ -182,7 +224,7 @@ public class NodeGraph
                     Debug.DrawLine(intercardLinks[i].StartPos, intercardLinks[i].EndPos, Color.green);
                 }
             }
-        }
+        }*/
     }
     public Vector3[] DebugNodePositions()
     {
