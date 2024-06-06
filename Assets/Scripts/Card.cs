@@ -40,6 +40,7 @@ public class Card
         links = new();
         linksTargetEdge = new();
         cornerLinks = new();
+        invalidCornerLinks = new();
     }
     enum Edge
     {
@@ -89,12 +90,27 @@ public class Card
         }
     }
     List<NodeLink> cornerLinks;
-    public ReadOnlyCollection<NodeLink> AllNodeLinks
+    /// <summary>
+    /// The links along the corners that are valid pathways for pathfinding
+    /// </summary>
+    public ReadOnlyCollection<NodeLink> ValidCornerLinks
     {
         get
         {
             StaleDataCheck();
             return cornerLinks.AsReadOnly();
+        }
+    }
+    List<NodeLink> invalidCornerLinks;
+    /// <summary>
+    /// Fake links that are only used for collision testing and not considered valid pathways for pathfinding
+    /// </summary>
+    public ReadOnlyCollection<NodeLink> InvalidCornerLinks
+    {
+        get
+        {
+            StaleDataCheck();
+            return invalidCornerLinks.AsReadOnly();
         }
     }
     public Node GetLinkingNode(Card target)
@@ -182,6 +198,8 @@ public class Card
     void GeneratePinsAndLinks()
     {
         pinNodes = new Node[links.Count];
+        cornerLinks.Clear();
+        invalidCornerLinks.Clear();
 
         Edge[] allEdges = System.Enum.GetValues(typeof(Edge)) as Edge[];
         Card[] orderedLinksBuffer;
@@ -200,6 +218,8 @@ public class Card
                     //Create a new node at a position along the edge based on order
                     pinNodes[links.IndexOf(orderedLinksBuffer[i])] = new Node(PinPositionCalculator(edge, distribution), this, true);
                 }
+                //These are generated for the sake of collision testing, not as valid pathways for strings.
+                invalidCornerLinks.Add(new NodeLink(GetFirstCornerNode(edge), GetLastCornerNode(edge)));
             }
             else //if there are no pins on this side
             {
