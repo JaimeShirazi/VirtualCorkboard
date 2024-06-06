@@ -175,11 +175,11 @@ public class NodeGraph
     float4[] debugLinkArrayBuffer;
     public IEnumerator DebugShaderOneAtATime()
     {
+        int totalIterations = debugOffsetBuffer * (debugTotalBuffer - debugOffsetBuffer);
         //Temporarily moving the logic out of the shader to ensure that the actual logic is correct
-        for (int id = 0; id < debugLinkArrayBuffer.Length; id++)
+        for (int id = 0; id < totalIterations; id++)
         {
-
-            int intercardIndex = id / debugOffsetBuffer;
+            int intercardIndex = (id / debugOffsetBuffer) + debugOffsetBuffer;
             int cardIndex = id % debugOffsetBuffer;
 
             Vector2 A = new Vector2(debugLinkArrayBuffer[intercardIndex].x, debugLinkArrayBuffer[intercardIndex].y);
@@ -193,14 +193,16 @@ public class NodeGraph
             float s = (A.y - C.y) * (B.x - A.x) - (A.x - C.x) * (B.y - A.y) /
                 (B.x - A.x) * (D.y - C.y) - (B.y - A.y) * (D.x - C.x);
 
-            float hitResult = Mathf.Max(
-                (r >= 0 && r <= 1 && s >= 0 && s <= 1) ? 1f : 0f,
-                ((A == C) || (A == D) || (B == D)) ? 1f : 0f
-                );
+            if ((A == C) || (A == D) || (B == C) || (B == D))
+            {
+                //The points were touching at the edges, so we should ignore the "collision"
+            }
 
-            Debug.Log(hitResult > 0f ? "hit" : "no");
-            Debug.DrawLine(A, B, hitResult > 0f ? Color.white : Color.green, 0.5f);
-            Debug.DrawLine(C, D, hitResult > 0f ? Color.white : Color.green, 0.5f);
+            Debug.Log("r: " + r + ", s: " + s);
+            bool hit = (r >= 0 && r <= 1 && s >= 0 && s <= 1);
+            Debug.Log(hit ? "hit" : "no");
+            Debug.DrawLine(A, B, hit ? Color.white : Color.green, 0.5f);
+            Debug.DrawLine(C, D, hit ? Color.white : Color.green, 0.5f);
 
             yield return new WaitForSeconds(0.5f);
         }
