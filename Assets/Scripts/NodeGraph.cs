@@ -165,10 +165,12 @@ public class NodeGraph
         cullIntercardLinks = new bool[intercardLinks.Count];
         for (int i = 0; i < hitsArray.Length; i++)
         {
-            cullIntercardLinks[i] = hitsArray[i] > 0 ? true : false;
+            Debug.Log("CPU: " + hitsArray[i]);
+            //cullIntercardLinks[i] = hitsArray[i] > 0 ? true : false;
         }
+        hitsArray = new float[intercardLinks.Count];
 
-        /*ComputeBuffer linkBuffer = new ComputeBuffer(linkArray.Length, sizeof(float) * 4);
+        ComputeBuffer linkBuffer = new ComputeBuffer(linkArray.Length, sizeof(float) * 4);
         linkBuffer.SetData(linkArray);
         ComputeBuffer hitBuffer = new ComputeBuffer(hitsArray.Length, sizeof(float));
         hitBuffer.SetData(hitsArray);
@@ -177,17 +179,17 @@ public class NodeGraph
         shader.SetInt("total", total);
         shader.SetBuffer(0, "links", linkBuffer);
         shader.SetBuffer(0, "hits", hitBuffer);
-        shader.Dispatch(0, Mathf.CeilToInt(linkArray.Length / 64f), 1, 1);
+        shader.Dispatch(0, Mathf.CeilToInt(totalIterations / 64f), 1, 1);
 
-        cullIntercardLinks = new bool[intercardLinks.Count];
+        //cullIntercardLinks = new bool[intercardLinks.Count];
         hitBuffer.GetData(hitsArray);
         for (int i = 0; i < hitsArray.Length; i++)
         {
             Debug.Log(hitsArray[i]);
-            cullIntercardLinks[i] = hitsArray[i] > 0 ? true : false;
+            cullIntercardLinks[i] = hitsArray[i] > Mathf.Epsilon ? true : false;
         }
         linkBuffer.Dispose();
-        hitBuffer.Dispose();*/
+        hitBuffer.Dispose();
     }
     public void DebugRender()
     {
