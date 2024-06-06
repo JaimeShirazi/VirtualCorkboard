@@ -160,9 +160,6 @@ public class NodeGraph
                 hitsArray[intercardIndex - offset],
                 hit ? 1 : 0
                 );
-
-            Debug.DrawLine(A, B, hit ? Color.white : Color.green, 0.5f);
-            Debug.DrawLine(C, D, hit ? Color.white : Color.green, 0.5f);
         }
 
         cullIntercardLinks = new bool[intercardLinks.Count];
@@ -170,11 +167,6 @@ public class NodeGraph
         {
             cullIntercardLinks[i] = hitsArray[i] > 0 ? true : false;
         }
-
-        //remove
-        debugOffsetBuffer = offset;
-        debugTotalBuffer = total;
-        debugLinkArrayBuffer = linkArray;
 
         /*ComputeBuffer linkBuffer = new ComputeBuffer(linkArray.Length, sizeof(float) * 4);
         linkBuffer.SetData(linkArray);
@@ -197,59 +189,6 @@ public class NodeGraph
         linkBuffer.Dispose();
         hitBuffer.Dispose();*/
     }
-    int debugOffsetBuffer;
-    int debugTotalBuffer;
-    float4[] debugLinkArrayBuffer;
-    public IEnumerator DebugShaderOneAtATime()
-    {
-        int totalIterations = debugOffsetBuffer * (debugTotalBuffer - debugOffsetBuffer);
-        //Temporarily moving the logic out of the shader to ensure that the actual logic is correct
-        for (int id = 0; id < totalIterations; id++)
-        {
-            int intercardIndex = (id / debugOffsetBuffer) + debugOffsetBuffer;
-            int cardIndex = id % debugOffsetBuffer;
-            Debug.Log((intercardIndex - debugOffsetBuffer) + " against " + (cardIndex + 1) + "/" + debugOffsetBuffer);
-
-            Vector2 A = new Vector2(debugLinkArrayBuffer[intercardIndex].x, debugLinkArrayBuffer[intercardIndex].y);
-            Vector2 B = new Vector2(debugLinkArrayBuffer[intercardIndex].z, debugLinkArrayBuffer[intercardIndex].w);
-            Vector2 C = new Vector2(debugLinkArrayBuffer[cardIndex].x, debugLinkArrayBuffer[cardIndex].y);
-            Vector2 D = new Vector2(debugLinkArrayBuffer[cardIndex].z, debugLinkArrayBuffer[cardIndex].w);
-
-            Vector2 a = B - A;
-            Vector2 b = C - D;
-            Vector2 c = A - C;
-
-            float Cross(Vector2 a, Vector2 b)
-            {
-                return a.y * b.x - a.x * b.y;
-            }
-            float alphaNumerator = Cross(b, c);
-            float betaNumerator = Cross(c, a);
-            float denominator = Cross(a, b);
-
-            bool FastIntersectCheck(float numerator, float denominator)
-            {
-                return denominator > 0 ?
-                    (numerator < 0 || numerator > denominator)
-                    : (numerator > 0 || numerator < denominator);
-            }
-            bool alphaRangeCheck = FastIntersectCheck(alphaNumerator, denominator);
-            bool betaRangeCheck = FastIntersectCheck(betaNumerator, denominator);
-
-            //The points were touching at the edges, so we should ignore the "collision".
-            //We can always assume for our use case that lines that share end points shouldn't be culled.
-            //Remove this if you want a collision detection algorithm that won't ignore lines that touch at endpoints
-            bool touchedEdges = ((A == C) || (A == D) || (B == C) || (B == D));
-
-            //If any of thense booleans are true, there was no intersection.
-            bool hit = !(denominator == 0 || alphaRangeCheck || betaRangeCheck || touchedEdges);
-
-            Debug.DrawLine(A, B, hit ? Color.white : Color.green, 0.5f);
-            Debug.DrawLine(C, D, hit ? Color.white : Color.green, 0.5f);
-
-            yield return new WaitForSeconds(0.5f);
-        }
-    }
     public void DebugRender()
     {
         foreach (NodeLink cardLink in cardLinks)
@@ -260,7 +199,7 @@ public class NodeGraph
         {
             Debug.DrawLine(pinLink.StartPos, pinLink.EndPos, Color.red);
         }
-        /*for (int i = 0; i < intercardLinks.Count; i++)
+        for (int i = 0; i < intercardLinks.Count; i++)
         {
             if (cullIntercardLinks != null)
             {
@@ -269,7 +208,7 @@ public class NodeGraph
                     Debug.DrawLine(intercardLinks[i].StartPos, intercardLinks[i].EndPos, Color.green);
                 }
             }
-        }*/
+        }
     }
     public Vector3[] DebugNodePositions()
     {

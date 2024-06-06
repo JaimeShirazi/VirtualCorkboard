@@ -25,7 +25,6 @@ public class GraphCreator : MonoBehaviour
         graph.AddLink(cardB, cardD);
         graph.Build();
         graph.RunComputeShader(shader);
-        StartCoroutine(graph.DebugShaderOneAtATime());
     }
     void Update()
     {

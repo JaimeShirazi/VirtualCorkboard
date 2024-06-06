@@ -6,29 +6,50 @@ RWStructuredBuffer<float> hits;
 int offset;
 int total;
 
+float Cross(float2 a, float2 b)
+{
+    return a.y * b.x - a.x * b.y;
+}
+
+bool FastIntersectCheck(float numerator, float denominator)
+{
+    return denominator > 0 ?
+        (numerator < 0 || numerator > denominator)
+        : (numerator > 0 || numerator < denominator);
+}
+
 [numthreads(64,1,1)]
 void CSMain (uint3 id : SV_DispatchThreadID)
 {
-    // I sure hope this math works the way I expect
-    int intercardIndex = id.x / offset;
+    int intercardIndex = (id.x / offset) + offset;
     int cardIndex = id.x % offset;
+
+    float2 A = links[intercardIndex].xy;
+    float2 B = links[intercardIndex].zw;
+    float2 C = links[cardIndex].xy;
+    float2 D = links[cardIndex].zw;
+
+    float2 a = B - A;
+    float2 b = C - D;
+    float2 c = A - C;
     
-    float4 AB = links[intercardIndex];
-    float4 CD = links[cardIndex];
+    float alphaNumerator = Cross(b, c);
+    float betaNumerator = Cross(c, a);
+    float denominator = Cross(a, b);
     
-    float r = (AB.y - CD.y) * (CD.z - CD.x) - (AB.x - CD.x) * (CD.w - CD.y) /
-        (AB.z - AB.x) * (CD.w - CD.y) - (AB.w - AB.y) * (CD.z - CD.x);
-    
-    float s = (AB.y - CD.y) * (AB.z - AB.x) - (AB.x - CD.x) * (AB.w - AB.y) /
-        (AB.z - AB.x) * (CD.w - CD.y) - (AB.w - AB.y) * (CD.z - CD.x);
-    
-    float hitResult = max(
-        (float)(r >= 0 && r <= 1 && s >= 0 && s <= 1),
-        (float)(AB.xy == CD.xy || AB.xy == CD.zw || AB.zw == CD.zw)
-        );
-    
-    hits[intercardIndex] = max(
-        hits[intercardIndex],
-        hitResult
+    bool alphaRangeCheck = FastIntersectCheck(alphaNumerator, denominator);
+    bool betaRangeCheck = FastIntersectCheck(betaNumerator, denominator);
+
+    //The points were touching at the edges, so we should ignore the "collision".
+    //We can always assume for our use case that lines that share end points shouldn't be culled.
+    //Remove this if you want a collision detection algorithm that won't ignore lines that touch at endpoints
+    bool touchedEdges = ((A == C) || (A == D) || (B == C) || (B == D));
+
+    //If any of thense booleans are true, there was no intersection.
+    bool hit = !(denominator == 0 || alphaRangeCheck || betaRangeCheck || touchedEdges);
+
+    hits[intercardIndex - offset] = max(
+        hits[intercardIndex - offset],
+        hit ? 1 : 0
         );
 }
