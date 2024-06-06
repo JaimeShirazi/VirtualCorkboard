@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using Unity.Mathematics;
+using UnityEditor.ShaderGraph.Internal;
 using UnityEngine;
 
 public class NodeGraph
@@ -109,7 +110,39 @@ public class NodeGraph
             linkArray[i + offset] = (float4)intercardLinks[i];
         }
 
-        ComputeBuffer linkBuffer = new ComputeBuffer(linkArray.Length, sizeof(float) * 4);
+        //Temporarily moving the logic out of the shader to ensure that the actual logic is correct
+        for (int id = 0; id < Mathf.CeilToInt(linkArray.Length / 64f); id++)
+        {
+            int intercardIndex = id / offset;
+            int cardIndex = id % offset;
+
+            Vector2 A = new Vector2(linkArray[intercardIndex].x, linkArray[intercardIndex].y);
+            Vector2 B = new Vector2(linkArray[intercardIndex].z, linkArray[intercardIndex].w);
+            Vector2 C = new Vector2(linkArray[cardIndex].x, linkArray[cardIndex].y);
+            Vector2 D = new Vector2(linkArray[cardIndex].z, linkArray[cardIndex].w);
+
+            float r = (A.y - C.y) * (D.x - C.x) - (A.x - C.x) * (D.y - C.y) /
+                (B.x - A.x) * (D.y - C.y) - (B.y - A.y) * (D.x - C.x);
+
+            float s = (A.y - C.y) * (B.x - A.x) - (A.x - C.x) * (B.y - A.y) /
+                (B.x - A.x) * (D.y - C.y) - (B.y - A.y) * (D.x - C.x);
+
+            float hitResult = Mathf.Max(
+                (r >= 0 && r <= 1 && s >= 0 && s <= 1) ? 1f : 0f,
+                ((A == C) || (A == D) || (B == D)) ? 1f : 0f
+                );
+
+            hitsArray[intercardIndex] = Mathf.Max(
+                hitsArray[intercardIndex],
+                hitResult
+                );
+        }
+        for (int i = 0; i < hitsArray.Length; i++)
+        {
+            cullIntercardLinks[i] = hitsArray[i] > 0 ? true : false;
+        }
+
+        /*ComputeBuffer linkBuffer = new ComputeBuffer(linkArray.Length, sizeof(float) * 4);
         linkBuffer.SetData(linkArray);
         ComputeBuffer hitBuffer = new ComputeBuffer(hitsArray.Length, sizeof(float));
         hitBuffer.SetData(hitsArray);
@@ -128,7 +161,7 @@ public class NodeGraph
             cullIntercardLinks[i] = hitsArray[i] > 0 ? true : false;
         }
         linkBuffer.Dispose();
-        hitBuffer.Dispose();
+        hitBuffer.Dispose();*/
     }
     public void DebugRender()
     {
