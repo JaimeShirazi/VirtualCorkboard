@@ -2,7 +2,7 @@
 #pragma kernel CSMain
 
 RWStructuredBuffer<float4> links;
-RWStructuredBuffer<float3> hits;
+RWStructuredBuffer<int> hits;
 int offset;
 int total;
 
@@ -27,8 +27,6 @@ void CSMain (uint3 id : SV_DispatchThreadID)
 {
     int intercardIndex = (id.x / offset) + offset;
     int cardIndex = id.x % offset;
-    
-    //hits[intercardIndex - offset] = links[intercardIndex].x + links[intercardIndex].y + links[intercardIndex].z + links[intercardIndex].w;
 
     float2 A = links[intercardIndex].xy;
     float2 B = links[intercardIndex].zw;
@@ -43,14 +41,6 @@ void CSMain (uint3 id : SV_DispatchThreadID)
     float betaNumerator = Cross(c, a);
     float denominator = Cross(a, b);
     
-    /*float Cross(Vector2 a, Vector2 b)
-            {
-                return a.y * b.x - a.x * b.y;
-            }
-            float alphaNumerator = Cross(b, c);
-            float betaNumerator = Cross(c, a);
-            float denominator = Cross(a, b);*/
-    
     bool denomCheck = denominator < 0.0001f && denominator > -0.0001f;
     bool alphaRangeCheck = FastIntersectCheck(alphaNumerator, denominator);
     bool betaRangeCheck = FastIntersectCheck(betaNumerator, denominator);
@@ -62,10 +52,7 @@ void CSMain (uint3 id : SV_DispatchThreadID)
 
     //If any of thense booleans are true, there was no intersection.
     bool noIntersect = (denomCheck || alphaRangeCheck || betaRangeCheck || touchedEdges);
-
-    /*hits[intercardIndex - offset] = max(
-        hits[intercardIndex - offset],
-        noIntersect ? 0 : 1
-        );*/
-    hits[id.x] = float3(noIntersect ? 0 : 1, denomCheck ? 1 : 0, (alphaRangeCheck || betaRangeCheck) ? 1 : 0);
+    
+    //Use interlocked max to prevent race conditions
+    InterlockedMax(hits[intercardIndex - offset], noIntersect ? 0 : 1);
 }

@@ -110,7 +110,7 @@ public class NodeGraph
         int totalIterations = offset * (total - offset);
 
         float4[] linkArray = new float4[total];
-        float3[] hitsArray = new float3[totalIterations];
+        int[] hitsArray = new int[intercardLinks.Count];
 
         //Get the link lists in float4 array form, and copy them to the linkArray buffer
         cardLinks.Select(link => (float4)link).ToArray().CopyTo(linkArray, 0);
@@ -158,12 +158,10 @@ public class NodeGraph
             //If any of thense booleans are true, there was no intersection.
             bool hit = !(denominator == 0 || alphaRangeCheck || betaRangeCheck || touchedEdges);
 
-            /*hitsArray[intercardIndex - offset] = Mathf.Max(
+            hitsArray[intercardIndex - offset] = Mathf.Max(
                 hitsArray[intercardIndex - offset],
                 hit ? 1 : 0
-                );*/
-
-            hitsArray[id] = new Vector3(hit ? 1 : 0, denominator == 0 ? 1 : 0, (alphaRangeCheck || betaRangeCheck) ? 1 : 0);
+                );
         }
 
         cullIntercardLinks = new bool[intercardLinks.Count];
@@ -172,13 +170,13 @@ public class NodeGraph
             //Debug.Log("CPU: " + hitsArray[i]);
             //cullIntercardLinks[i] = hitsArray[i] > 0 ? true : false;
         }
-        float3[] hitsArray2 = new float3[hitsArray.Length];
+        int[] hitsArray2 = new int[hitsArray.Length];
         hitsArray.CopyTo(hitsArray2, 0);
-        hitsArray = new float3[hitsArray2.Length];
+        hitsArray = new int[hitsArray2.Length];
 
         ComputeBuffer linkBuffer = new ComputeBuffer(linkArray.Length, sizeof(float) * 4);
         linkBuffer.SetData(linkArray);
-        ComputeBuffer hitBuffer = new ComputeBuffer(hitsArray.Length, sizeof(float) * 3);
+        ComputeBuffer hitBuffer = new ComputeBuffer(hitsArray.Length, sizeof(int));
         hitBuffer.SetData(hitsArray);
 
         shader.SetInt("offset", offset);
@@ -191,13 +189,16 @@ public class NodeGraph
         hitBuffer.GetData(hitsArray);
         for (int i = 0; i < hitsArray.Length; i++)
         {
-            if (!Mathf.Approximately(hitsArray[i].x, hitsArray2[i].x) || !Mathf.Approximately(hitsArray[i].y, hitsArray2[i].y) || !Mathf.Approximately(hitsArray[i].z, hitsArray2[i].z))
+            if (hitsArray[i] != hitsArray2[i])
             {
                 Debug.Log("Discrepency: " + (hitsArray[i] - hitsArray2[i]));
-                //Debug.Log("CPU: " + hitsArray2[i].x + ", GPU: " + hitsArray[i].x + ", denom: " + hitsArray2[i].y);
+            }
+            else
+            {
+                Debug.Log("No discrepency");
             }
 
-            //cullIntercardLinks[i] = hitsArray[i] > Mathf.Epsilon ? true : false;
+            cullIntercardLinks[i] = hitsArray[i] > Mathf.Epsilon ? true : false;
         }
         linkBuffer.Dispose();
         hitBuffer.Dispose();
