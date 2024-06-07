@@ -163,7 +163,7 @@ public class NodeGraph
                 hit ? 1 : 0
                 );*/
 
-            hitsArray[id] = new Vector3((A - C).magnitude, (B - D).magnitude, touchedEdges ? 1 : 0);
+            hitsArray[id] = new Vector3(hit ? 1 : 0, denominator == 0 ? 1 : 0, (alphaRangeCheck || betaRangeCheck) ? 1 : 0);
         }
 
         cullIntercardLinks = new bool[intercardLinks.Count];
@@ -195,10 +195,6 @@ public class NodeGraph
             {
                 Debug.Log("Discrepency: " + (hitsArray[i] - hitsArray2[i]));
                 //Debug.Log("CPU: " + hitsArray2[i].x + ", GPU: " + hitsArray[i].x + ", denom: " + hitsArray2[i].y);
-            }
-            else
-            {
-                Debug.Log(hitsArray2[i].z);
             }
 
             //cullIntercardLinks[i] = hitsArray[i] > Mathf.Epsilon ? true : false;

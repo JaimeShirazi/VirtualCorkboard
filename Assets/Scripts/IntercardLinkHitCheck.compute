@@ -67,5 +67,5 @@ void CSMain (uint3 id : SV_DispatchThreadID)
         hits[intercardIndex - offset],
         noIntersect ? 0 : 1
         );*/
-    hits[id.x] = float3(length(A - C), length(B - D), touchedEdges ? 1 : 0);
+    hits[id.x] = float3(noIntersect ? 0 : 1, denomCheck ? 1 : 0, (alphaRangeCheck || betaRangeCheck) ? 1 : 0);
 }
