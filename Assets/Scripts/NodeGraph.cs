@@ -107,20 +107,22 @@ public class NodeGraph
     {
         int offset = cardLinks.Count + invalidCardLinks.Count;
         int total = offset + intercardLinks.Count;
+        int totalIterations = offset * (total - offset);
 
         float4[] linkArray = new float4[total];
-        float[] hitsArray = new float[intercardLinks.Count];
+        float3[] hitsArray = new float3[totalIterations];
 
         //Get the link lists in float4 array form, and copy them to the linkArray buffer
         cardLinks.Select(link => (float4)link).ToArray().CopyTo(linkArray, 0);
         invalidCardLinks.Select(link => (float4)link).ToArray().CopyTo(linkArray, cardLinks.Count);
         intercardLinks.Select(link => (float4)link).ToArray().CopyTo(linkArray, offset);
 
-        int totalIterations = offset * (total - offset);
         for (int id = 0; id < totalIterations; id++)
         {
             int intercardIndex = (id / offset) + offset;
             int cardIndex = id % offset;
+
+            //hitsArray[intercardIndex - offset] = linkArray[intercardIndex].x + linkArray[intercardIndex].y + linkArray[intercardIndex].z + linkArray[intercardIndex].w;
 
             Vector2 A = new Vector2(linkArray[intercardIndex].x, linkArray[intercardIndex].y);
             Vector2 B = new Vector2(linkArray[intercardIndex].z, linkArray[intercardIndex].w);
@@ -156,23 +158,27 @@ public class NodeGraph
             //If any of thense booleans are true, there was no intersection.
             bool hit = !(denominator == 0 || alphaRangeCheck || betaRangeCheck || touchedEdges);
 
-            hitsArray[intercardIndex - offset] = Mathf.Max(
+            /*hitsArray[intercardIndex - offset] = Mathf.Max(
                 hitsArray[intercardIndex - offset],
                 hit ? 1 : 0
-                );
+                );*/
+
+            hitsArray[id] = new Vector3(a.x + a.y, b.x + b.y, c.x + c.y);
         }
 
         cullIntercardLinks = new bool[intercardLinks.Count];
         for (int i = 0; i < hitsArray.Length; i++)
         {
-            Debug.Log("CPU: " + hitsArray[i]);
+            //Debug.Log("CPU: " + hitsArray[i]);
             //cullIntercardLinks[i] = hitsArray[i] > 0 ? true : false;
         }
-        hitsArray = new float[intercardLinks.Count];
+        float3[] hitsArray2 = new float3[hitsArray.Length];
+        hitsArray.CopyTo(hitsArray2, 0);
+        hitsArray = new float3[hitsArray2.Length];
 
         ComputeBuffer linkBuffer = new ComputeBuffer(linkArray.Length, sizeof(float) * 4);
         linkBuffer.SetData(linkArray);
-        ComputeBuffer hitBuffer = new ComputeBuffer(hitsArray.Length, sizeof(float));
+        ComputeBuffer hitBuffer = new ComputeBuffer(hitsArray.Length, sizeof(float) * 3);
         hitBuffer.SetData(hitsArray);
 
         shader.SetInt("offset", offset);
@@ -185,8 +191,12 @@ public class NodeGraph
         hitBuffer.GetData(hitsArray);
         for (int i = 0; i < hitsArray.Length; i++)
         {
-            Debug.Log(hitsArray[i]);
-            cullIntercardLinks[i] = hitsArray[i] > Mathf.Epsilon ? true : false;
+            if (!Mathf.Approximately(hitsArray[i].x, hitsArray2[i].x) || !Mathf.Approximately(hitsArray[i].y, hitsArray2[i].y) || !Mathf.Approximately(hitsArray[i].z, hitsArray2[i].z))
+            {
+                Debug.Log("Discrepency: " + (hitsArray[i] - hitsArray2[i]));
+            }
+
+            //cullIntercardLinks[i] = hitsArray[i] > Mathf.Epsilon ? true : false;
         }
         linkBuffer.Dispose();
         hitBuffer.Dispose();

@@ -2,7 +2,7 @@
 #pragma kernel CSMain
 
 RWStructuredBuffer<float4> links;
-RWStructuredBuffer<float> hits;
+RWStructuredBuffer<float3> hits;
 int offset;
 int total;
 
@@ -11,11 +11,11 @@ float Cross(float2 a, float2 b)
     return a.y * b.x - a.x * b.y;
 }
 
-bool FastIntersectCheck(float numerator, float denominator)
+bool FastIntersectCheck(float numerator, float denominator, float epsilon = 0.0001f)
 {
-    return denominator > 0 ?
-        (numerator < 0 || numerator > denominator)
-        : (numerator > 0 || numerator < denominator);
+    return denominator > epsilon ?
+        (numerator < epsilon || numerator > denominator - epsilon)
+        : (numerator > -epsilon || numerator < denominator + epsilon);
 }
 bool ApproxEquals(float2 a, float2 b, float epsilon = 0.0001f)
 {
@@ -27,20 +27,39 @@ void CSMain (uint3 id : SV_DispatchThreadID)
 {
     int intercardIndex = (id.x / offset) + offset;
     int cardIndex = id.x % offset;
+    
+    //hits[intercardIndex - offset] = links[intercardIndex].x + links[intercardIndex].y + links[intercardIndex].z + links[intercardIndex].w;
 
     float2 A = links[intercardIndex].xy;
     float2 B = links[intercardIndex].zw;
     float2 C = links[cardIndex].xy;
     float2 D = links[cardIndex].zw;
 
-    float2 a = B - A;
+    /*float2 a = B - A;
     float2 b = C - D;
     float2 c = A - C;
     
     float alphaNumerator = Cross(b, c);
     float betaNumerator = Cross(c, a);
-    float denominator = Cross(a, b);
+    float denominator = Cross(a, b);*/
     
+    float2 a = float2(links[intercardIndex].z - links[intercardIndex].x, links[intercardIndex].w - links[intercardIndex].y);
+    float2 b = float2(links[cardIndex].x - links[cardIndex].z, links[cardIndex].y - links[cardIndex].w);
+    float2 c = float2(links[intercardIndex].x - links[cardIndex].x, links[intercardIndex].y - links[cardIndex].y);
+    
+    float alphaNumerator = b.y * c.x - b.x * c.y;
+    float betaNumerator = c.y * a.x - c.x * a.y;
+    float denominator = a.y * b.x - a.x * b.y;
+    
+    /*float Cross(Vector2 a, Vector2 b)
+            {
+                return a.y * b.x - a.x * b.y;
+            }
+            float alphaNumerator = Cross(b, c);
+            float betaNumerator = Cross(c, a);
+            float denominator = Cross(a, b);*/
+    
+    bool denomCheck = denominator < 0.0001f && denominator > -0.0001f;
     bool alphaRangeCheck = FastIntersectCheck(alphaNumerator, denominator);
     bool betaRangeCheck = FastIntersectCheck(betaNumerator, denominator);
 
@@ -50,10 +69,11 @@ void CSMain (uint3 id : SV_DispatchThreadID)
     bool touchedEdges = (ApproxEquals(A, C) || ApproxEquals(A, D) || ApproxEquals(B, C) || ApproxEquals(B, D));
 
     //If any of thense booleans are true, there was no intersection.
-    bool noIntersect = (denominator == 0 || alphaRangeCheck || betaRangeCheck || touchedEdges);
+    bool noIntersect = (denomCheck || alphaRangeCheck || betaRangeCheck || touchedEdges);
 
-    hits[intercardIndex - offset] = max(
+    /*hits[intercardIndex - offset] = max(
         hits[intercardIndex - offset],
         noIntersect ? 0 : 1
-        );
+        );*/
+    hits[id.x] = float3(a.x + a.y, b.x + b.y, c.x + c.y);
 }
