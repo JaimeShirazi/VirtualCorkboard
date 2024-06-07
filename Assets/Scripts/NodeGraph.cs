@@ -163,7 +163,7 @@ public class NodeGraph
                 hit ? 1 : 0
                 );*/
 
-            hitsArray[id] = new Vector3(a.x + a.y, b.x + b.y, c.x + c.y);
+            hitsArray[id] = new Vector3(betaNumerator, denominator, betaRangeCheck ? 1 : 0);
         }
 
         cullIntercardLinks = new bool[intercardLinks.Count];
@@ -188,12 +188,15 @@ public class NodeGraph
         shader.Dispatch(0, Mathf.CeilToInt(totalIterations / 64f), 1, 1);
 
         //cullIntercardLinks = new bool[intercardLinks.Count];
+        Debug.Log("Epsilon" + Mathf.Epsilon);
         hitBuffer.GetData(hitsArray);
         for (int i = 0; i < hitsArray.Length; i++)
         {
-            if (!Mathf.Approximately(hitsArray[i].x, hitsArray2[i].x) || !Mathf.Approximately(hitsArray[i].y, hitsArray2[i].y) || !Mathf.Approximately(hitsArray[i].z, hitsArray2[i].z))
+            //!Mathf.Approximately(hitsArray[i].x, hitsArray2[i].x) || !Mathf.Approximately(hitsArray[i].y, hitsArray2[i].y) || 
+            if (!Mathf.Approximately(hitsArray[i].z, hitsArray2[i].z))
             {
                 Debug.Log("Discrepency: " + (hitsArray[i] - hitsArray2[i]));
+                Debug.Log("CPU: " + hitsArray2[i].x + ", GPU: " + hitsArray[i].x + ", denom: " + hitsArray2[i].y);
             }
 
             //cullIntercardLinks[i] = hitsArray[i] > Mathf.Epsilon ? true : false;

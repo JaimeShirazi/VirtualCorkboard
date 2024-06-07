@@ -13,9 +13,9 @@ float Cross(float2 a, float2 b)
 
 bool FastIntersectCheck(float numerator, float denominator, float epsilon = 0.0001f)
 {
-    return denominator > epsilon ?
-        (numerator < epsilon || numerator > denominator - epsilon)
-        : (numerator > -epsilon || numerator < denominator + epsilon);
+    return denominator > 0 ?
+        (numerator < -epsilon || numerator > denominator)
+        : (numerator > epsilon || numerator < denominator);
 }
 bool ApproxEquals(float2 a, float2 b, float epsilon = 0.0001f)
 {
@@ -35,21 +35,13 @@ void CSMain (uint3 id : SV_DispatchThreadID)
     float2 C = links[cardIndex].xy;
     float2 D = links[cardIndex].zw;
 
-    /*float2 a = B - A;
+    float2 a = B - A;
     float2 b = C - D;
     float2 c = A - C;
     
     float alphaNumerator = Cross(b, c);
     float betaNumerator = Cross(c, a);
-    float denominator = Cross(a, b);*/
-    
-    float2 a = float2(links[intercardIndex].z - links[intercardIndex].x, links[intercardIndex].w - links[intercardIndex].y);
-    float2 b = float2(links[cardIndex].x - links[cardIndex].z, links[cardIndex].y - links[cardIndex].w);
-    float2 c = float2(links[intercardIndex].x - links[cardIndex].x, links[intercardIndex].y - links[cardIndex].y);
-    
-    float alphaNumerator = b.y * c.x - b.x * c.y;
-    float betaNumerator = c.y * a.x - c.x * a.y;
-    float denominator = a.y * b.x - a.x * b.y;
+    float denominator = Cross(a, b);
     
     /*float Cross(Vector2 a, Vector2 b)
             {
@@ -75,5 +67,5 @@ void CSMain (uint3 id : SV_DispatchThreadID)
         hits[intercardIndex - offset],
         noIntersect ? 0 : 1
         );*/
-    hits[id.x] = float3(a.x + a.y, b.x + b.y, c.x + c.y);
+    hits[id.x] = float3(betaNumerator, denominator, betaRangeCheck ? 1 : 0);
 }
