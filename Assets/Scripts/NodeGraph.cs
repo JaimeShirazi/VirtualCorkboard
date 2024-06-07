@@ -117,63 +117,6 @@ public class NodeGraph
         invalidCardLinks.Select(link => (float4)link).ToArray().CopyTo(linkArray, cardLinks.Count);
         intercardLinks.Select(link => (float4)link).ToArray().CopyTo(linkArray, offset);
 
-        for (int id = 0; id < totalIterations; id++)
-        {
-            int intercardIndex = (id / offset) + offset;
-            int cardIndex = id % offset;
-
-            //hitsArray[intercardIndex - offset] = linkArray[intercardIndex].x + linkArray[intercardIndex].y + linkArray[intercardIndex].z + linkArray[intercardIndex].w;
-
-            Vector2 A = new Vector2(linkArray[intercardIndex].x, linkArray[intercardIndex].y);
-            Vector2 B = new Vector2(linkArray[intercardIndex].z, linkArray[intercardIndex].w);
-            Vector2 C = new Vector2(linkArray[cardIndex].x, linkArray[cardIndex].y);
-            Vector2 D = new Vector2(linkArray[cardIndex].z, linkArray[cardIndex].w);
-
-            Vector2 a = B - A;
-            Vector2 b = C - D;
-            Vector2 c = A - C;
-
-            float Cross(Vector2 a, Vector2 b)
-            {
-                return a.y * b.x - a.x * b.y;
-            }
-            float alphaNumerator = Cross(b, c);
-            float betaNumerator = Cross(c, a);
-            float denominator = Cross(a, b);
-
-            bool FastIntersectCheck(float numerator, float denominator)
-            {
-                return denominator > 0 ?
-                    (numerator < 0 || numerator > denominator)
-                    : (numerator > 0 || numerator < denominator);
-            }
-            bool alphaRangeCheck = FastIntersectCheck(alphaNumerator, denominator);
-            bool betaRangeCheck = FastIntersectCheck(betaNumerator, denominator);
-
-            //The points were touching at the edges, so we should ignore the "collision".
-            //We can always assume for our use case that lines that share end points shouldn't be culled.
-            //Remove this if you want a collision detection algorithm that won't ignore lines that touch at endpoints
-            bool touchedEdges = ((A == C) || (A == D) || (B == C) || (B == D));
-
-            //If any of thense booleans are true, there was no intersection.
-            bool hit = !(denominator == 0 || alphaRangeCheck || betaRangeCheck || touchedEdges);
-
-            hitsArray[intercardIndex - offset] = Mathf.Max(
-                hitsArray[intercardIndex - offset],
-                hit ? 1 : 0
-                );
-        }
-
-        cullIntercardLinks = new bool[intercardLinks.Count];
-        for (int i = 0; i < hitsArray.Length; i++)
-        {
-            //Debug.Log("CPU: " + hitsArray[i]);
-            //cullIntercardLinks[i] = hitsArray[i] > 0 ? true : false;
-        }
-        int[] hitsArray2 = new int[hitsArray.Length];
-        hitsArray.CopyTo(hitsArray2, 0);
-        hitsArray = new int[hitsArray2.Length];
-
         ComputeBuffer linkBuffer = new ComputeBuffer(linkArray.Length, sizeof(float) * 4);
         linkBuffer.SetData(linkArray);
         ComputeBuffer hitBuffer = new ComputeBuffer(hitsArray.Length, sizeof(int));
@@ -183,22 +126,14 @@ public class NodeGraph
         shader.SetInt("total", total);
         shader.SetBuffer(0, "links", linkBuffer);
         shader.SetBuffer(0, "hits", hitBuffer);
+        Debug.Log(totalIterations);
         shader.Dispatch(0, Mathf.CeilToInt(totalIterations / 64f), 1, 1);
 
-        //cullIntercardLinks = new bool[intercardLinks.Count];
+        cullIntercardLinks = new bool[intercardLinks.Count];
         hitBuffer.GetData(hitsArray);
         for (int i = 0; i < hitsArray.Length; i++)
         {
-            if (hitsArray[i] != hitsArray2[i])
-            {
-                Debug.Log("Discrepency: " + (hitsArray[i] - hitsArray2[i]));
-            }
-            else
-            {
-                Debug.Log("No discrepency");
-            }
-
-            cullIntercardLinks[i] = hitsArray[i] > Mathf.Epsilon ? true : false;
+            cullIntercardLinks[i] = hitsArray[i] == 1;
         }
         linkBuffer.Dispose();
         hitBuffer.Dispose();
