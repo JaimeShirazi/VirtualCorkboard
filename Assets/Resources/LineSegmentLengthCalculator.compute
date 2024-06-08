@@ -1,0 +1,14 @@
+#pragma kernel CSMain
+
+RWStructuredBuffer<float4> links;
+
+float distance(float4 segment)
+{
+    return sqrt(pow(segment.z - segment.x, 2) + pow(segment.w - segment.y, 2));
+}
+
+[numthreads(64,1,1)]
+void CSMain (uint3 id : SV_DispatchThreadID)
+{
+    links[id.x].x = distance(links[id.x]);
+}

@@ -1,9 +1,11 @@
 using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
+using Unity.Collections;
 using Unity.Mathematics;
 using UnityEditor.ShaderGraph.Internal;
 using UnityEngine;
+using UnityEngine.Rendering;
 
 public class NodeGraph
 {
@@ -65,15 +67,26 @@ public class NodeGraph
         a.RemoveLink(b);
         b.RemoveLink(a);
 
-        pinLinks.Remove(Card.GetCardPairID(a, b));
+        ulong code = Card.GetCardPairID(a, b);
+
+        pinLinks[code].Release();
+        pinLinks.Remove(code);
+    }
+    void ClearLinkList(List<NodeLink> target)
+    {
+        for (int i = target.Count - 1; i >= 0; i--)
+        {
+            target[i].Release();
+        }
+        target.Clear();
     }
     public void Build()
     {
         //Clear previously buffered data
         nodesBuffer.Clear();
-        cardLinks.Clear();
-        invalidCardLinks.Clear();
-        intercardLinks.Clear();
+        ClearLinkList(cardLinks);
+        ClearLinkList(invalidCardLinks);
+        ClearLinkList(intercardLinks);
         foreach (Card card in cards)
         {
             nodesBuffer.AddRange(card.CornerNodes);
@@ -102,9 +115,11 @@ public class NodeGraph
             }
         }
     }
-    bool[] cullIntercardLinks;
-    public void RunComputeShader(ComputeShader shader)
+    ComputeBuffer linkBuffer, hitBuffer;
+    public IEnumerator CullIntersectsAndGetLength(ComputeShader intersectCheck, ComputeShader lengthCalc)
     {
+        if (linkBuffer != null || hitBuffer != null) yield break;
+
         int offset = cardLinks.Count + invalidCardLinks.Count;
         int total = offset + intercardLinks.Count;
         int totalIterations = offset * (total - offset);
@@ -117,27 +132,71 @@ public class NodeGraph
         invalidCardLinks.Select(link => (float4)link).ToArray().CopyTo(linkArray, cardLinks.Count);
         intercardLinks.Select(link => (float4)link).ToArray().CopyTo(linkArray, offset);
 
-        ComputeBuffer linkBuffer = new ComputeBuffer(linkArray.Length, sizeof(float) * 4);
+        //Create the buffers that represent the space in GPU memory the shaders will use
+        linkBuffer = new ComputeBuffer(linkArray.Length, sizeof(float) * 4);
+        hitBuffer = new ComputeBuffer(hitsArray.Length, sizeof(int));
+
         linkBuffer.SetData(linkArray);
-        ComputeBuffer hitBuffer = new ComputeBuffer(hitsArray.Length, sizeof(int));
         hitBuffer.SetData(hitsArray);
 
-        shader.SetInt("offset", offset);
-        shader.SetInt("total", total);
-        shader.SetBuffer(0, "links", linkBuffer);
-        shader.SetBuffer(0, "hits", hitBuffer);
-        Debug.Log(totalIterations);
-        shader.Dispatch(0, Mathf.CeilToInt(totalIterations / 64f), 1, 1);
+        //Assign the values to the shader and dispatch as little thread groups necessary to process every line segment
+        intersectCheck.SetInt("offset", offset);
+        intersectCheck.SetInt("total", total);
+        intersectCheck.SetBuffer(0, "links", linkBuffer);
+        intersectCheck.SetBuffer(0, "hits", hitBuffer);
+        intersectCheck.Dispatch(0, Mathf.CeilToInt(totalIterations / 64f), 1, 1);
 
-        cullIntercardLinks = new bool[intercardLinks.Count];
-        hitBuffer.GetData(hitsArray);
-        for (int i = 0; i < hitsArray.Length; i++)
+        //Asynchronously read back the hit data
+        AsyncGPUReadbackRequest hitRequest = AsyncGPUReadback.Request(hitBuffer);
+        yield return new WaitUntil(() => hitRequest.done || hitRequest.hasError);
+        if (hitRequest.hasError) Debug.LogError("Encountered error attempting to fetch hit results!");
+        hitRequest.GetData<int>().CopyTo(hitsArray);
+
+        //We're going to rewrite data back into the buffer for reuse. It's all going to be filled in backwards, so we'll have to flip the order after.
+        float4[] linksToFindLength = new float4[intercardLinks.Count];
+        //Remove all the intercardLinks that we aren't keeping
+        int culledSize = 0;
+        int refilledCounter = 0;
+        for (int i = hitsArray.Length - 1; i >= 0; i--)
         {
-            cullIntercardLinks[i] = hitsArray[i] == 1;
+            if (hitsArray[i] == 1)
+            {
+                intercardLinks.RemoveAt(i);
+                culledSize++;
+            }
+            else
+            {
+                linksToFindLength[refilledCounter] = linkArray[i + offset];
+                refilledCounter++;
+            }
         }
-        linkBuffer.Dispose();
-        hitBuffer.Dispose();
+        //Updating the buffers, preparing to use them
+        hitBuffer.Release();
+        hitBuffer = null;
+        linkBuffer.SetData(linksToFindLength, 0, 0, refilledCounter);
+
+        //Dispatch the length check shader
+        lengthCalc.SetBuffer(0, "links", linkBuffer);
+        lengthCalc.Dispatch(0, Mathf.CeilToInt(refilledCounter / 64f), 1, 1);
+
+        //Retrieve calculated data
+        AsyncGPUReadbackRequest linkRequest = AsyncGPUReadback.Request(linkBuffer);
+        yield return new WaitUntil(() => linkRequest.done || linkRequest.hasError);
+        if (linkRequest.hasError) Debug.LogError("Encountered error attempting to fetch link distance results!");
+        linksToFindLength = linkRequest.GetData<float4>().ToArray();
+
+        for (int i = 0; i < refilledCounter; i++)
+        {
+            intercardLinks[refilledCounter - i - 1].distance = linksToFindLength[i].x;
+            debugShortest = Mathf.Min(debugShortest, linksToFindLength[i].x);
+            debugLongest = Mathf.Max(debugLongest, linksToFindLength[i].x);
+        }
+
+        linkBuffer.Release();
+        linkBuffer = null;
     }
+    private float debugShortest = float.MaxValue;
+    private float debugLongest = float.MinValue;
     public void DebugRender()
     {
         foreach (NodeLink cardLink in cardLinks)
@@ -146,17 +205,11 @@ public class NodeGraph
         }
         foreach (NodeLink pinLink in pinLinks.Values)
         {
-            Debug.DrawLine(pinLink.StartPos, pinLink.EndPos, Color.red);
+            Debug.DrawLine(pinLink.StartPos, pinLink.EndPos, Color.white);
         }
-        for (int i = 0; i < intercardLinks.Count; i++)
+        foreach (NodeLink intercardLink in intercardLinks)
         {
-            if (cullIntercardLinks != null)
-            {
-                if (!cullIntercardLinks[i])
-                {
-                    Debug.DrawLine(intercardLinks[i].StartPos, intercardLinks[i].EndPos, Color.green);
-                }
-            }
+            Debug.DrawLine(intercardLink.StartPos, intercardLink.EndPos, Color.Lerp(Color.green, Color.red, (intercardLink.distance - debugShortest) / debugLongest));
         }
     }
     public Vector3[] DebugNodePositions()

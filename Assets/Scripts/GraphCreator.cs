@@ -4,16 +4,23 @@ using UnityEngine;
 
 public class GraphCreator : MonoBehaviour
 {
-    public ComputeShader shader;
+    [SerializeField] private PathfinderManager pathfinder;
+
+    private ComputeShader intersectCheckShader, lengthShader;
 
     public GameObject spherePrefab;
     private List<Transform> spheres = new();
 
     NodeGraph graph = new();
+    void Awake()
+    {
+        intersectCheckShader = Resources.Load("LineSegmentIntersectCheck") as ComputeShader;
+        lengthShader = Resources.Load("LineSegmentLengthCalculator") as ComputeShader;
+    }
     void Start()
     {
         List<Card> randomCards = new List<Card>();
-        for (int i = 0; i < 50; i++)
+        for (int i = 0; i < 10; i++)
         {
             randomCards.Add(new Card(new Rect(Random.Range(-10, 10), Random.Range(-10, 10), Random.Range(0.1f, 2f), Random.Range(0.1f, 2f))));
             graph.AddCard(randomCards[i]);
@@ -34,7 +41,7 @@ public class GraphCreator : MonoBehaviour
         graph.AddLink(cardB, cardC);
         graph.AddLink(cardB, cardD);*/
         graph.Build();
-        graph.RunComputeShader(shader);
+        StartCoroutine(graph.CullIntersectsAndGetLength(intersectCheckShader, lengthShader));
     }
     void Update()
     {
