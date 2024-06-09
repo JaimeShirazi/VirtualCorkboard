@@ -1,9 +1,7 @@
 using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
-using Unity.Collections;
 using Unity.Mathematics;
-using UnityEditor.ShaderGraph.Internal;
 using UnityEngine;
 using UnityEngine.Rendering;
 
@@ -161,6 +159,7 @@ public class NodeGraph
         {
             if (hitsArray[i] == 1)
             {
+                intercardLinks[i].Release();
                 intercardLinks.RemoveAt(i);
                 culledSize++;
             }
@@ -195,9 +194,11 @@ public class NodeGraph
         linkBuffer.Release();
         linkBuffer = null;
     }
+
+    //Everything with "debug" in front of it will be removed before the end of the project
     private float debugShortest = float.MaxValue;
     private float debugLongest = float.MinValue;
-    public void DebugRender()
+    public void DebugRender(Path withPath)
     {
         foreach (NodeLink cardLink in cardLinks)
         {
@@ -205,13 +206,29 @@ public class NodeGraph
         }
         foreach (NodeLink pinLink in pinLinks.Values)
         {
-            Debug.DrawLine(pinLink.StartPos, pinLink.EndPos, Color.white);
+            Debug.DrawLine(pinLink.StartPos, pinLink.EndPos, Color.cyan);
         }
         foreach (NodeLink intercardLink in intercardLinks)
         {
             Debug.DrawLine(intercardLink.StartPos, intercardLink.EndPos, Color.Lerp(Color.green, Color.red, (intercardLink.distance - debugShortest) / debugLongest));
         }
+        if (withPath != null)
+        {
+            foreach (PointedNodeLink link in withPath.Links)
+            {
+                Debug.DrawLine(link.Link.StartPos, link.Link.EndPos, Color.white);
+            }
+        }
     }
+#if UNITY_EDITOR
+    public void DebugRenderLabels()
+    {
+        foreach (Node node in nodesBuffer)
+        {
+            node.DebugDrawID();
+        }
+    }
+#endif
     public Vector3[] DebugNodePositions()
     {
         Vector3[] allPos = new Vector3[nodesBuffer.Count];
@@ -222,5 +239,14 @@ public class NodeGraph
         }
 
         return allPos;
+    }
+    public Node DebugRandomNode(bool bePin)
+    {
+        Node random = nodesBuffer[UnityEngine.Random.Range(0, nodesBuffer.Count - 1)];
+        while (random.isPin != bePin)
+        {
+            random = nodesBuffer[UnityEngine.Random.Range(0, nodesBuffer.Count - 1)];
+        }
+        return random;
     }
 }

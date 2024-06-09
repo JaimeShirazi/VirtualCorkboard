@@ -2,8 +2,22 @@ using System.Collections.Generic;
 using System.Linq;
 using UnityEngine;
 
+#if UNITY_EDITOR
+using UnityEditor;
+#endif
+
 public class Node
 {
+#if UNITY_EDITOR
+    public int id;
+    public static int maxId;
+    public string customMessage;
+    public void DebugDrawID()
+    {
+        Handles.Label(position, "ID: " + id + "\n" + customMessage);
+    }
+#endif
+
     public readonly Vector2 position;
     public readonly Card owner;
     public readonly bool isPin;
@@ -13,6 +27,10 @@ public class Node
         owner = card;
         this.isPin = isPin;
         linkMap = new();
+#if UNITY_EDITOR
+        id = maxId;
+        maxId++;
+#endif
     }
     private HashSet<NodeLink> linkMap;
     /// <summary>

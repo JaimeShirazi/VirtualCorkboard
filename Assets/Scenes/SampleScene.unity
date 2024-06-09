@@ -388,6 +388,7 @@ GameObject:
   m_Component:
   - component: {fileID: 1473235415}
   - component: {fileID: 1473235414}
+  - component: {fileID: 1473235416}
   m_Layer: 0
   m_Name: Testing Logic
   m_TagString: Untagged
@@ -407,7 +408,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 8fc50863400f2b849908508a7caa8868, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  shader: {fileID: 7200000, guid: e547cd2da13c3a84c8dd47fb969e1270, type: 3}
+  pathfinder: {fileID: 1473235416}
   spherePrefab: {fileID: 5508459348866384001, guid: 785692883d3e0664c8e59fd3f8c22f21,
     type: 3}
 --- !u!4 &1473235415
@@ -425,6 +426,18 @@ Transform:
   m_Children: []
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &1473235416
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1473235413}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 97a59b21164872f4aa14f18a97a26b24, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
 --- !u!1660057539 &9223372036854775807
 SceneRoots:
   m_ObjectHideFlags: 0

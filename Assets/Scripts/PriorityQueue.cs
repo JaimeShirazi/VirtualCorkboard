@@ -1,3 +1,5 @@
+#nullable enable
+
 //This was ported from the original source code by me.
 //The goal was to try change as little as possible and just add interpreters to the source so it would work in Unity.
 

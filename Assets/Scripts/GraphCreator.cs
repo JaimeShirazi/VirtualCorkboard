@@ -1,5 +1,6 @@
 using System.Collections;
 using System.Collections.Generic;
+using UnityEditor;
 using UnityEngine;
 
 public class GraphCreator : MonoBehaviour
@@ -41,11 +42,32 @@ public class GraphCreator : MonoBehaviour
         graph.AddLink(cardB, cardC);
         graph.AddLink(cardB, cardD);*/
         graph.Build();
-        StartCoroutine(graph.CullIntersectsAndGetLength(intersectCheckShader, lengthShader));
+        StartCoroutine(CullAndFindPath());
+    }
+    IEnumerator CullAndFindPath()
+    {
+        //We have to wait so the culling is finished before the pathfinding is done
+        yield return StartCoroutine(graph.CullIntersectsAndGetLength(intersectCheckShader, lengthShader));
+
+        Node randomStart, randomEnd;
+        randomStart = graph.DebugRandomNode(false);
+        randomEnd = graph.DebugRandomNode(false);
+        while (randomStart == randomEnd)
+        {
+            randomEnd = graph.DebugRandomNode(false);
+        }
+        yield return StartCoroutine(FindPathAsync(randomStart, randomEnd));
+    }
+    Path debugBestPath;
+    IEnumerator FindPathAsync(Node from, Node to)
+    {
+        Pathfinder activeFinder = pathfinder.CreatePathfinder(from, to);
+        yield return activeFinder;
+        debugBestPath = activeFinder.bestPath;
     }
     void Update()
     {
-        graph.DebugRender();
+        graph.DebugRender(debugBestPath);
         Vector3[] debugPos = graph.DebugNodePositions();
         for (int i = 0; i < debugPos.Length; i++)
         {
@@ -55,5 +77,20 @@ public class GraphCreator : MonoBehaviour
             }
             spheres[i].position = debugPos[i];
         }
+    }
+#if UNITY_EDITOR
+    public void OnSceneGUI()
+    {
+        graph.DebugRenderLabels();
+    }
+#endif
+}
+[CustomEditor(typeof(GraphCreator))]
+public class GraphCreatorEditor : Editor
+{
+    private void OnSceneGUI()
+    {
+        GraphCreator graph = target as GraphCreator;
+        graph.OnSceneGUI();
     }
 }
