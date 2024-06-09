@@ -151,6 +151,7 @@ public struct PathRequest
 }
 public class Pathfinder : CustomYieldInstruction
 {
+    public PriorityQueue<Path, float> openPaths = new();
     public override bool keepWaiting
     {
         get
@@ -163,7 +164,7 @@ public class Pathfinder : CustomYieldInstruction
     {
 
     }
-    public Path GetTopQueuePath()
+    public Path PopFromStack()
     {
         //TODO
         throw new System.NotImplementedException();
