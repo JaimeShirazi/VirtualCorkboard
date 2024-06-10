@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
+using Unity.VisualScripting;
 using UnityEngine;
 
 public class Card
@@ -18,24 +19,28 @@ public class Card
         return id;
     }
 
-    Rect shape;
-    public Card(Rect rect)
+    private readonly NodeGraph graph;
+
+    public readonly Rect shape;
+    public Card(NodeGraph graph, Rect rect)
     {
         //Assign this card's ID, increment the static counter by 1 for the next card
         thisID = maxID; maxID++;
+
+        this.graph = graph;
 
         shape = rect;
 
         // -- GENERATE THE CORNER NODES --
         cornerNodes = new Node[4];
         //Top left
-        cornerNodes[0] = new Node(new Vector2(shape.xMin, shape.yMax), this, false);
+        cornerNodes[0] = new Node(graph, this, new Vector2(shape.xMin, shape.yMax), false);
         //Top right
-        cornerNodes[1] = new Node(new Vector2(shape.xMax, shape.yMax), this, false);
+        cornerNodes[1] = new Node(graph, this, new Vector2(shape.xMax, shape.yMax), false);
         //Bottom left
-        cornerNodes[2] = new Node(new Vector2(shape.xMin, shape.yMin), this, false);
+        cornerNodes[2] = new Node(graph, this, new Vector2(shape.xMin, shape.yMin), false);
         //Bttom right
-        cornerNodes[3] = new Node(new Vector2(shape.xMax, shape.yMin), this, false);
+        cornerNodes[3] = new Node(graph, this, new Vector2(shape.xMax, shape.yMin), false);
 
         links = new();
         linksTargetEdge = new();
@@ -216,15 +221,38 @@ public class Card
                     //A value between 0 to 1 representing where along the edge this node should be distributed
                     float distribution = (i + 1) / (float)(orderedLinksBuffer.Length + 1);
                     //Create a new node at a position along the edge based on order
-                    pinNodes[links.IndexOf(orderedLinksBuffer[i])] = new Node(PinPositionCalculator(edge, distribution), this, true);
+                    pinNodes[links.IndexOf(orderedLinksBuffer[i])] = new Node(graph, this, PinPositionCalculator(edge, distribution), true);
                 }
                 //These are generated for the sake of collision testing, not as valid pathways for strings.
                 invalidCornerLinks.Add(new NodeLink(GetFirstCornerNode(edge), GetLastCornerNode(edge)));
+                //Generate the distance values for the edge anyways to avoid potential bugs if the code is modified later, i doubt this adds much overhead anyways
+                switch (edge)
+                {
+                    case Edge.North: case Edge.South:
+                        invalidCornerLinks[^1].distance = shape.height;
+                        break;
+                    case Edge.East: case Edge.West:
+                        invalidCornerLinks[^1].distance = shape.width;
+                        break;
+                }
             }
             else //if there are no pins on this side
             {
                 //Create a link along the edge of this card
                 cornerLinks.Add(new NodeLink(GetFirstCornerNode(edge), GetLastCornerNode(edge)));
+
+                //Generate the distance values for the card edges
+                switch (edge)
+                {
+                    case Edge.North:
+                    case Edge.South:
+                        cornerLinks[^1].distance = shape.height;
+                        break;
+                    case Edge.East:
+                    case Edge.West:
+                        cornerLinks[^1].distance = shape.width;
+                        break;
+                }
             }
         }
 

@@ -8,29 +8,38 @@ using UnityEditor;
 
 public class Node
 {
-#if UNITY_EDITOR
-    public int id;
-    public static int maxId;
-    public string customMessage;
-    public void DebugDrawID()
+    #region ID management
+    public int ID
     {
-        Handles.Label(position, "ID: " + id + "\n" + customMessage);
+        get
+        {
+            return nodeID;
+        }
     }
-#endif
+    private int nodeID;
+    public static int highestID;
+    #endregion
 
     public readonly Vector2 position;
-    public readonly Card owner;
+    /// <summary>
+    /// The card that this Node comes from.
+    /// </summary>
+    public readonly Card card;
+    /// <summary>
+    /// The NodeGraph that this Node comes from.
+    /// </summary>
+    public readonly NodeGraph graph;
     public readonly bool isPin;
-    public Node(Vector2 currentPos, Card card, bool isPin)
+    public Node(NodeGraph graph, Card card, Vector2 position, bool isPin)
     {
-        position = currentPos;
-        owner = card;
+        nodeID = highestID; highestID++;
+
+        this.graph = graph;
+        this.card = card;
+        this.position = position;
         this.isPin = isPin;
+
         linkMap = new();
-#if UNITY_EDITOR
-        id = maxId;
-        maxId++;
-#endif
     }
     private HashSet<NodeLink> linkMap;
     /// <summary>
@@ -42,4 +51,17 @@ public class Node
     {
         get { return linkMap.ToArray(); }
     }
+
+    #region Debug functions that won't be compiled for the release
+#if UNITY_EDITOR
+    public string debug_customMessage;
+    /// <summary>
+    /// Should only be called during OnSceneGUI, by an Editor capable of receiving it.
+    /// </summary>
+    public void Debug_DrawID()
+    {
+        Handles.Label(position, "ID: " + ID + "\n" + debug_customMessage);
+    }
+#endif
+    #endregion
 }
