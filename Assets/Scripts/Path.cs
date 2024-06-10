@@ -75,10 +75,6 @@ public class Path
         {
             costSoFar += path[i].Link.distance;
         }
-        if (costSoFar == 0)
-        {
-            Debug.Log("Added " + path.Length + " paths and distance was 0!");
-        }
 
         costHeuristic = heuristic * HEURISTIC_COST_MULTIPLIER;
     }
@@ -152,11 +148,6 @@ public class Path
     }
     #endregion
 
-    NativeArray<float> costs, positions;
-    /// <summary>
-    /// An array of nodes generated, split off from this Path.
-    /// </summary>
-    Path[] pendingSplit;
     public SplitRequest Split()
     {
 #if UNITY_EDITOR
@@ -164,8 +155,9 @@ public class Path
 #endif
 
         List<NodeLink> availableLinks = endNode.Links.ToList();
-        pendingSplit = new Path[endNode.Links.Length - (path.Length > 0 ? 1 : 0)];
-        positions = new NativeArray<float>(pendingSplit.Length * 2 + 2, Allocator.TempJob);
+        //An array of nodes generated, split off from this Path.
+        Path[] pendingSplit = new Path[endNode.Links.Length - (path.Length > 0 ? 1 : 0)];
+        NativeArray<float> positions = new NativeArray<float>(pendingSplit.Length * 2 + 2, Allocator.TempJob);
         //First 2 entries are the same, just the x and y of the end points
         positions[0] = targetNode.position.x;
         positions[1] = targetNode.position.y;
@@ -192,7 +184,7 @@ public class Path
             nextIndex++;
         }
 
-        costs = new NativeArray<float>(pendingSplit.Length, Allocator.TempJob);
+        NativeArray<float> costs = new NativeArray<float>(pendingSplit.Length, Allocator.TempJob);
 
         CalculateHeuristics preparedJob = new CalculateHeuristics()
         {
@@ -203,7 +195,7 @@ public class Path
         return new SplitRequest()
         {
             job = preparedJob,
-            onComplete = () => OnCalculationComplete(),
+            onComplete = () => OnCalculationComplete(pendingSplit, costs, positions),
             threads = pendingSplit.Length
         };
     }
@@ -213,29 +205,15 @@ public class Path
         public Func<Path[]> onComplete;
         public int threads;
     }
-    public Path[] OnCalculationComplete()
+    public Path[] OnCalculationComplete(Path[] pendingPaths, NativeArray<float> costs, NativeArray<float> positions)
     {
         for (int i = 0; i < costs.Length; i++)
         {
-#if UNITY_EDITOR
-            try
-            {
-                //TODO: this is returning null for some reason
-                Debug.Log("ID: " + pendingSplit[i].EndNode.ID);
-            }
-            catch { }
-            try
-            {
-                Debug.Log("Cost: " + costs[i]);
-            }
-            catch { }
-            Debug.Log("Index " + i + " ends at " + pendingSplit[i].EndNode.ID + " with cost " + costs[i]);
-#endif
-            pendingSplit[i].CalculateCost(costs[i]);
+            pendingPaths[i].CalculateCost(costs[i]);
         }
         positions.Dispose();
         costs.Dispose();
-        return pendingSplit;
+        return pendingPaths;
     }
     public struct CalculateHeuristics : IJobParallelFor
     {

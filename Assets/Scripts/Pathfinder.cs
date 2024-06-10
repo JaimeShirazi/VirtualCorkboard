@@ -36,18 +36,17 @@ public class Pathfinder : CustomYieldInstruction
 
     Path.SplitRequest pendingRequest;
     JobHandle jobHandle;
-    public void Update()
+    List<JobHandle> openJobs = new();
+    public void PrepareJobs()
     {
         //Get a PathRequest struct from the highest priority path, representing the result of splitting that path into a bunch of new paths
         Path nextPath = openPaths.Dequeue();
-#if UNITY_EDITOR
-        Debug.Log("Splitting from " + nextPath.EndNode.ID);
-#endif
+
         pendingRequest = nextPath.Split();
 
         jobHandle = pendingRequest.job.Schedule(pendingRequest.threads, 1);
     }
-    public void LateUpdate()
+    public void FinishJobs()
     {
         //TODO: Some of the logic here is messy, find some more elegant alternatives
 
@@ -55,9 +54,6 @@ public class Pathfinder : CustomYieldInstruction
         Path[] result = pendingRequest.onComplete();
         foreach (Path path in result)
         {
-#if UNITY_EDITOR
-            Debug.Log("Recieved path ending at " + path.EndNode.ID + " with cost " + path.Cost);
-#endif
             openPaths.Enqueue(path, path.Cost);
             if (path.IsComplete)
             {

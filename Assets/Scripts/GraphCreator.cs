@@ -1,5 +1,6 @@
 using System.Collections;
 using System.Collections.Generic;
+using System.Linq;
 using UnityEditor;
 using UnityEngine;
 
@@ -11,17 +12,24 @@ public class GraphCreator : MonoBehaviour
     private List<Transform> spheres = new();
 
     NodeGraph graph = new();
-    IEnumerator Start()
+    public void BuildGraph()
     {
-        #region Create the cards and links
-        //Dirty random card generator that avoids intersecting cards, this is just for the sake of testing
+        StartCoroutine(graph.Build());
+    }
+    //Dirty random card generator that avoids intersecting cards, this is just for the sake of testing
+    public void CreateRandomCardLayout(int amount)
+    {
+        graph.Clear();
+
         List<Card> randomCards = new List<Card>();
-        for (int i = 0; i < 16; i++)
+        for (int i = 0; i < amount; i++)
         {
             Rect targetShape;
             while (true)
             {
-                targetShape = new Rect(Random.Range(-8, 8), Random.Range(-8, 8), Random.Range(0.2f, 3f), Random.Range(0.2f, 3f));
+                float width = Random.Range(0.2f, 3f);
+                float height = Random.Range(0.2f, 3f);
+                targetShape = new Rect(Random.Range(-8 + width / 2f, 8 - width / 2f), Random.Range(-8 + height / 2f, 8 - height / 2f), width, height);
                 bool intersectsWithAnotherCard = false;
                 foreach (Card card in randomCards)
                 {
@@ -40,6 +48,7 @@ public class GraphCreator : MonoBehaviour
                 graph.AddLink(randomCards[i - 1], randomCards[i]);
             }
         }
+
         //Small corkboard layout with a few linked cards for when I need a testing environment that doesn't change
         /*Card cardA = new Card(graph, new Rect(0, 0, 1, 2));
         Card cardB = new Card(graph, new Rect(2, 3, 0.8f, 3f));
@@ -48,16 +57,39 @@ public class GraphCreator : MonoBehaviour
         graph.AddCard(cardA);
         graph.AddCard(cardB);
         graph.AddCard(cardC);
+
         graph.AddCard(cardD);
         graph.AddLink(cardA, cardB);
         graph.AddLink(cardB, cardC);
         graph.AddLink(cardB, cardD);*/
-        #endregion
-
-        //Build the graph with the data we just entered
-        yield return graph.Build();
     }
-    public IEnumerator FindRandomPathAsync(int fromID, int toID)
+    public IEnumerator FindManyRandomPathsAsync(int amount)
+    {
+        List<Pathfinder> pathfinders = new();
+        List<int> usedIDs = new();
+        for (int i = 0; i < amount; i++)
+        {
+            Node randomStart = graph.DebugRandomNode(false);
+            while (usedIDs.Contains(randomStart.ID))
+            {
+                randomStart = graph.DebugRandomNode(false);
+            }
+            usedIDs.Add(randomStart.ID);
+            Node randomEnd = graph.DebugRandomNode(false);
+            while (usedIDs.Contains(randomEnd.ID))
+            {
+                randomEnd = graph.DebugRandomNode(false);
+            }
+            usedIDs.Add(randomEnd.ID);
+            pathfinders.Add(pathfinder.CreatePathfinder(randomStart, randomEnd));
+        }
+        foreach (Pathfinder finder in pathfinders)
+        {
+            yield return finder;
+        }
+        debugPaths = pathfinders.Select(finder => finder.bestPath).ToArray();
+    }
+    public IEnumerator FindPathAsync(int fromID, int toID)
     {
         //Find random nodes to create a path between, this all code is bad and not performant cos its all temporary
         Node randomStart, randomEnd;
@@ -73,23 +105,23 @@ public class GraphCreator : MonoBehaviour
         Pathfinder activeFinder = pathfinder.CreatePathfinder(randomStart, randomEnd);
         yield return activeFinder;
 
-        debugBestPath = activeFinder.bestPath;
+        debugPaths = new Path[] { activeFinder.bestPath };
     }
-    Path debugBestPath;
+    Path[] debugPaths;
 
     [HideInInspector]
     public bool renderCards, renderPins, renderIntercards, renderPath, renderSpheres = true;
     void Update()
     {
-        graph.DebugRender(renderCards, renderPins, renderIntercards, renderPath ? debugBestPath : null);
+        graph.DebugRender(transform.position, renderCards, renderPins, renderIntercards, renderPath ? debugPaths : null);
         Vector3[] debugPos = graph.DebugNodePositions();
         for (int i = 0; i < debugPos.Length; i++)
         {
             if (i >= spheres.Count)
             {
-                spheres.Add(Instantiate(spherePrefab).transform);
+                spheres.Add(Instantiate(spherePrefab, transform).transform);
             }
-            spheres[i].position = debugPos[i];
+            spheres[i].localPosition = debugPos[i];
             if (spheres[i].gameObject.activeInHierarchy != renderSpheres)
             {
                 spheres[i].gameObject.SetActive(renderSpheres);
@@ -99,27 +131,42 @@ public class GraphCreator : MonoBehaviour
 #if UNITY_EDITOR
     public void OnSceneGUI()
     {
-        graph.DebugRenderLabels();
+        graph.DebugRenderLabels(transform.position);
     }
 #endif
 }
 
 #if UNITY_EDITOR
+[CanEditMultipleObjects]
 [CustomEditor(typeof(GraphCreator))]
 public class GraphCreatorEditor : Editor
 {
-    GraphCreator component;
+    List<GraphCreator> components = new();
     bool renderFoldoutState;
-    bool renderNodeLabels = true;
+    bool renderNodeLabels = false;
     int fromNodeID, toNodeID;
+    int pathsToGenerate = 1;
+    int cardsToGenerate = 16;
     private void OnEnable()
     {
-        component = (GraphCreator)target;
+        components.Add((GraphCreator)target);
+        foreach (Object oneTarget in targets)
+        {
+            if (!components.Contains((GraphCreator)oneTarget))
+            {
+                components.Add((GraphCreator)oneTarget);
+            }
+        }
     }
     private void OnSceneGUI()
     {
         if (renderNodeLabels)
-            component.OnSceneGUI();
+        {
+            foreach (GraphCreator graphCreator in components)
+            {
+                graphCreator.OnSceneGUI();
+            }
+        }
     }
     public override void OnInspectorGUI()
     {
@@ -128,32 +175,87 @@ public class GraphCreatorEditor : Editor
         renderFoldoutState = EditorGUILayout.BeginFoldoutHeaderGroup(renderFoldoutState, "Debug Render Toggles");
         if (renderFoldoutState)
         {
+            bool newValueBuffer;
             using (new EditorGUILayout.HorizontalScope())
             {
-                component.renderCards = EditorGUILayout.Toggle("Card links", component.renderCards);
-                component.renderPins = EditorGUILayout.Toggle("Pin links", component.renderPins);
+                newValueBuffer = EditorGUILayout.Toggle("Card links", components[0].renderCards);
+                foreach (GraphCreator graphCreator in components)
+                    graphCreator.renderCards = newValueBuffer;
+
+                newValueBuffer = EditorGUILayout.Toggle("Pin links", components[0].renderPins);
+                foreach (GraphCreator graphCreator in components)
+                    graphCreator.renderPins = newValueBuffer;
             }
             using (new EditorGUILayout.HorizontalScope())
             {
-                component.renderIntercards = EditorGUILayout.Toggle("Intercard links", component.renderIntercards);
-                component.renderPath = EditorGUILayout.Toggle("Path", component.renderPath);
+                newValueBuffer = EditorGUILayout.Toggle("Intercard links", components[0].renderIntercards);
+                foreach (GraphCreator graphCreator in components)
+                    graphCreator.renderIntercards = newValueBuffer;
+
+                newValueBuffer = EditorGUILayout.Toggle("Path", components[0].renderPath);
+                foreach (GraphCreator graphCreator in components)
+                    graphCreator.renderPath = newValueBuffer;
             }
             using (new EditorGUILayout.HorizontalScope())
             {
-                component.renderSpheres = EditorGUILayout.Toggle("Nodes", component.renderSpheres);
+                newValueBuffer = EditorGUILayout.Toggle("Nodes", components[0].renderSpheres);
+                foreach (GraphCreator graphCreator in components)
+                    graphCreator.renderSpheres = newValueBuffer;
+
                 renderNodeLabels = EditorGUILayout.Toggle("Node labels", renderNodeLabels);
             }
         }
         EditorGUILayout.EndFoldoutHeaderGroup();
+
+        EditorGUILayout.Space(8);
+
+        using (new EditorGUILayout.HorizontalScope())
+        {
+            cardsToGenerate = Mathf.Max(EditorGUILayout.IntField("Cards", cardsToGenerate), 1);
+            if (GUILayout.Button("Create new layout"))
+            {
+                foreach (GraphCreator graphCreator in components)
+                {
+                    graphCreator.CreateRandomCardLayout(cardsToGenerate);
+                }
+            }
+        }
+        EditorGUILayout.Space(8);
+        if (GUILayout.Button("Build graphs"))
+        {
+            foreach (GraphCreator graphCreator in components)
+            {
+                graphCreator.BuildGraph();
+            }
+        }
+
+        EditorGUILayout.Space(8);
+
+        using (new EditorGUILayout.HorizontalScope())
+        {
+            pathsToGenerate = Mathf.Max(EditorGUILayout.IntField("Num. o/paths to find", pathsToGenerate), 1);
+            if (GUILayout.Button("Go"))
+            {
+                foreach (GraphCreator graphCreator in components)
+                {
+                    graphCreator.StartCoroutine(graphCreator.FindManyRandomPathsAsync(pathsToGenerate));
+                }
+            }
+        }
+
+        EditorGUILayout.Space(8);
 
         using (new EditorGUILayout.HorizontalScope())
         {
             fromNodeID = EditorGUILayout.IntField("From", fromNodeID);
             toNodeID = EditorGUILayout.IntField("To", toNodeID);
         }
-        if (GUILayout.Button("Generate a random path"))
+        if (GUILayout.Button("Generate path with target"))
         {
-            component.StartCoroutine(component.FindRandomPathAsync(fromNodeID, toNodeID));
+            foreach (GraphCreator graphCreator in components)
+            {
+                graphCreator.StartCoroutine(graphCreator.FindPathAsync(fromNodeID, toNodeID));
+            }
         }
     }
 }

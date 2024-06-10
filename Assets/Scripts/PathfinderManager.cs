@@ -20,29 +20,28 @@ public class PathfinderManager : MonoBehaviour
         activePathfinders.Add(new Pathfinder(from, to));
         return activePathfinders[^1];
     }
+    #region Updating the pathfinders
+    const int ITERATIONS_PER_FRAME = 4;
     void Update()
     {
-        //We remove finished pathfinders, and call their Updates.
-        //This approach is inherently singlethreaded, I would like to figure out if it's possible to multithread this in the future.
-        for (int i = activePathfinders.Count - 1; i >= 0; i--)
+        if (activePathfinders.Count > 0)
         {
-            if (!activePathfinders[i].keepWaiting)
+            for (int a = 0; a < ITERATIONS_PER_FRAME; a++)
             {
-                activePathfinders.RemoveAt(i); continue;
+                for (int i = activePathfinders.Count - 1; i >= 0; i--)
+                {
+                    activePathfinders[i].PrepareJobs();
+                }
+                for (int i = activePathfinders.Count - 1; i >= 0; i--)
+                {
+                    activePathfinders[i].FinishJobs();
+                    if (!activePathfinders[i].keepWaiting)
+                    {
+                        activePathfinders.RemoveAt(i); continue;
+                    }
+                }
             }
-            activePathfinders[i].Update();
         }
     }
-    void LateUpdate()
-    {
-        //We remove finished pathfinders, and call their LateUpdates.
-        for (int i = activePathfinders.Count - 1; i >= 0; i--)
-        {
-            if (!activePathfinders[i].keepWaiting)
-            {
-                activePathfinders.RemoveAt(i); continue;
-            }
-            activePathfinders[i].LateUpdate();
-        }
-    }
+    #endregion
 }

@@ -98,6 +98,13 @@ public class NodeGraph
 
         built = false;
     }
+    public void Clear()
+    {
+        cards.Clear();
+        pinLinks.Clear();
+        ClearBufferedData();
+        built = false;
+    }
     #endregion
 
     #region Building-related logic
@@ -105,6 +112,21 @@ public class NodeGraph
     /// Tracks if the graph is already building itself, used to prevent the Build coroutine from running more than one at a time.
     /// </summary>
     private bool building;
+    void ClearBufferedData()
+    {
+        nodesBuffer.Clear();
+        static void ClearLinkList(List<NodeLink> target)
+        {
+            for (int i = target.Count - 1; i >= 0; i--)
+            {
+                target[i].Release();
+            }
+            target.Clear();
+        }
+        ClearLinkList(cardLinks);
+        ClearLinkList(invalidCardLinks);
+        ClearLinkList(intercardLinks);
+    }
     /// <summary>
     /// Builds the graph using the data. This needs to be ran every time a change is made to the graph.
     /// </summary>
@@ -124,19 +146,7 @@ public class NodeGraph
             loadLengthShader = Resources.LoadAsync("LineSegmentLengthCalculator", typeof(ComputeShader));
         }
 
-        //Clear previously buffered data
-        nodesBuffer.Clear();
-        static void ClearLinkList(List<NodeLink> target)
-        {
-            for (int i = target.Count - 1; i >= 0; i--)
-            {
-                target[i].Release();
-            }
-            target.Clear();
-        }
-        ClearLinkList(cardLinks);
-        ClearLinkList(invalidCardLinks);
-        ClearLinkList(intercardLinks);
+        ClearBufferedData();
 
         //Buffer nodes and links from the cards
         foreach (Card card in cards)
@@ -305,43 +315,46 @@ public class NodeGraph
     //Everything with "debug" in front of it is temporary and will be removed before the end of the project
     private float debugShortest = float.MaxValue;
     private float debugLongest = float.MinValue;
-    public void DebugRender(bool renderCards, bool renderPins, bool renderIntercards, Path withPath)
+    public void DebugRender(Vector3 offset, bool renderCards, bool renderPins, bool renderIntercards, Path[] withPaths)
     {
         if (renderCards)
         {
             foreach (NodeLink cardLink in cardLinks)
             {
-                Debug.DrawLine(cardLink.StartPos, cardLink.EndPos, Color.blue);
+                Debug.DrawLine(cardLink.StartPos + offset, cardLink.EndPos + offset, Color.blue);
             }
         }
         if (renderPins)
         {
             foreach (NodeLink pinLink in pinLinks.Values)
             {
-                Debug.DrawLine(pinLink.StartPos, pinLink.EndPos, Color.cyan);
+                Debug.DrawLine(pinLink.StartPos + offset, pinLink.EndPos + offset, Color.cyan);
             }
         }
         if (renderIntercards)
         {
             foreach (NodeLink intercardLink in intercardLinks)
             {
-                Debug.DrawLine(intercardLink.StartPos, intercardLink.EndPos, Color.Lerp(Color.green, Color.red, (intercardLink.distance - debugShortest) / debugLongest));
+                Debug.DrawLine(intercardLink.StartPos + offset, intercardLink.EndPos + offset, Color.Lerp(Color.green, Color.red, (intercardLink.distance - debugShortest) / debugLongest));
             }
         }
-        if (withPath != null)
+        if (withPaths != null)
         {
-            foreach (PointedNodeLink link in withPath.Links)
+            foreach (Path path in withPaths)
             {
-                Debug.DrawLine(link.Link.StartPos, link.Link.EndPos, Color.white);
+                foreach (PointedNodeLink link in path.Links)
+                {
+                    Debug.DrawLine(link.Link.StartPos + offset, link.Link.EndPos + offset, Color.white);
+                }
             }
         }
     }
 #if UNITY_EDITOR
-    public void DebugRenderLabels()
+    public void DebugRenderLabels(Vector3 offset)
     {
         foreach (Node node in nodesBuffer)
         {
-            node.Debug_DrawID();
+            node.Debug_DrawID(offset);
         }
     }
 #endif

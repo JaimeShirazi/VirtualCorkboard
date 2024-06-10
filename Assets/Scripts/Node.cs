@@ -58,9 +58,9 @@ public class Node
     /// <summary>
     /// Should only be called during OnSceneGUI, by an Editor capable of receiving it.
     /// </summary>
-    public void Debug_DrawID()
+    public void Debug_DrawID(Vector3 offset)
     {
-        Handles.Label(position, "ID: " + ID + "\n" + debug_customMessage);
+        Handles.Label((Vector3)position + offset, "ID: " + ID + "\n" + debug_customMessage);
     }
 #endif
     #endregion
