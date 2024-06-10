@@ -21,6 +21,11 @@ public class PathfinderManager : MonoBehaviour
         return activePathfinders[^1];
     }
     #region Updating the pathfinders
+    //We're stalling the main thread while these computations are being completed, just spreading them out across many threads threads.
+    //So while we're still multithreading and saving time, we're still missing out on the benefits of having a completely parallel workflow.
+    //If I were to split the PrepareJobs() and FinishJobs() across Update and LateUpdate, we could avoid stalling the main thread, but that would force us to only advance the paths by 1 every frame.
+    //In a truly multithreaded workflow, we wouldn't have this problem, but since we're using C# Jobs instead of threading, we still need to sync up with the main thread.
+    //This is partially against the spirit of multithreading, but it's better than nothing. I might come back at some point later and try make this even more parallel.
     const int ITERATIONS_PER_FRAME = 4;
     void Update()
     {
