@@ -105,9 +105,9 @@ public class GraphCreator : MonoBehaviour
         Pathfinder activeFinder = pathfinder.CreatePathfinder(randomStart, randomEnd);
         yield return activeFinder;
 
-        debugPaths = new Path[] { activeFinder.result };
+        debugPaths = new NavPath[] { activeFinder.result };
     }
-    Path[] debugPaths;
+    NavPath[] debugPaths;
 
     [HideInInspector]
     public bool renderCards, renderPins, renderIntercards, renderPath, renderSpheres = true;

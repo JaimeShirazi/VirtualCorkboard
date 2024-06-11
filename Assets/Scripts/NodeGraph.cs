@@ -49,6 +49,10 @@ public class NodeGraph
     /// However, they will have their collisions checked against just the cardLinks, and will destroy themselves if they collide with any of the card links.
     /// </summary>
     List<NodeLink> intercardLinks = new();
+    /// <summary>
+    /// This will store all the routes that the strings between the pins will take.
+    /// </summary>
+    Dictionary<ulong, PathFramework> pinRoutes = new();
     #endregion
 
     #region Functions that allow inputting data into the graph
@@ -115,6 +119,7 @@ public class NodeGraph
     void ClearBufferedData()
     {
         nodesBuffer.Clear();
+        pinRoutes.Clear();
         static void ClearLinkList(List<NodeLink> target)
         {
             for (int i = target.Count - 1; i >= 0; i--)
@@ -377,11 +382,11 @@ public class NodeGraph
         for (int i = pinLinks.Keys.Count - 1; i >= 0; i--)
         {
             ulong key = pinLinks.Keys.ToArray()[i];
-            if (!pinList.Contains(pinLinks[key]))
+            if (pinList.Contains(pinLinks[key]))
             {
-                pinLinks.Remove(key);
+                //We just use pinLinks[key].start because which end of the route is the start and the end is entirely arbritrary and doesn't matter
+                pinRoutes.Add(key, new SingleLinkPath(new PointedNodeLink(pinLinks[key], pinLinks[key].start)));
             }
-            //pinLinks.Remove(pinLinks.First(x => x.Value == pinList[i]).Key);
         }
 
         //Then we check the pin nodes against each other. We do not do this in parallel because we want to be able to remove an intersecting link, and stop using that link for collision checks with the other pins. This is necessarily sequential.
@@ -396,7 +401,7 @@ public class NodeGraph
 
     #region Debug functions that will be removed
     //Everything with "debug" in front of it is temporary and will be removed before the end of the project
-    public void DebugRender(Vector3 offset, bool renderCards, bool renderPins, bool renderIntercards, Path[] withPaths)
+    public void DebugRender(Vector3 offset, bool renderCards, bool renderPins, bool renderIntercards, NavPath[] withPaths)
     {
         if (renderIntercards)
         {
@@ -421,11 +426,23 @@ public class NodeGraph
         }
         if (withPaths != null)
         {
-            foreach (Path path in withPaths)
+            foreach (PathFramework path in withPaths)
             {
-                foreach (PointedNodeLink link in path.Links)
+                Node[] nodeArray = path.GetOrderedNodeArray();
+                for (int i = 0; i < nodeArray.Length - 1; i++)
                 {
-                    Debug.DrawLine(link.Link.StartPos + offset, link.Link.EndPos + offset, Color.white);
+                    Debug.DrawLine((Vector3)nodeArray[i].position + offset, (Vector3)nodeArray[i + 1].position + offset, Color.white);
+                }
+            }
+        }
+        else
+        {
+            foreach (PathFramework path in pinRoutes.Values)
+            {
+                Node[] nodeArray = path.GetOrderedNodeArray();
+                for (int i = 0; i < nodeArray.Length - 1; i++)
+                {
+                    Debug.DrawLine((Vector3)nodeArray[i].position + offset, (Vector3)nodeArray[i + 1].position + offset, Color.white);
                 }
             }
         }

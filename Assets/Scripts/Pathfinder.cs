@@ -11,19 +11,19 @@ public class Pathfinder : CustomYieldInstruction
     /// The PriorityQueue that holds all the open paths and their costs.
     /// All split paths get added back here, and the lowest estimated cost path is repeatedly popped from the top of the queue until one of the paths are completed.
     /// </summary>
-    private PriorityQueue<Path, float> openPaths = new();
+    private PriorityQueue<NavPath, float> openPaths = new();
 
     /// <summary>
     /// Once a pathfinder completes, this result will store the best path that the pathfinder found.
     /// </summary>
-    public Path result
+    public NavPath result
     {
         get
         {
             return bestPath;
         }
     }
-    private Path bestPath;
+    private NavPath bestPath;
 
     /// <summary>
     /// Called by the PathfinderManager when a new pathfind operation is intended to be started.
@@ -33,7 +33,7 @@ public class Pathfinder : CustomYieldInstruction
     public Pathfinder(Node from, Node to)
     {
         //Create a brand new path with 0 links and enqueue it
-        Path initialPath = new Path(from, to);
+        NavPath initialPath = new NavPath(from, to);
         openPaths.Enqueue(initialPath, initialPath.Cost);
 
 #if UNITY_EDITOR
@@ -61,7 +61,7 @@ public class Pathfinder : CustomYieldInstruction
     /// <summary>
     /// A buffer that holds onto the currently executing Path split request.
     /// </summary>
-    Path.SplitRequest pendingRequest;
+    NavPath.SplitRequest pendingRequest;
     /// <summary>
     /// A buffer that holds onto the currently executing JobHandle.
     /// </summary>
@@ -89,7 +89,7 @@ public class Pathfinder : CustomYieldInstruction
         //Stall the main thread if the jobs aren't all complete
         jobHandle.Complete();
         //Call the struct's onComplete function now that the job is done, and buffer the new paths we get returned
-        Path[] newPaths = pendingRequest.onComplete();
+        NavPath[] newPaths = pendingRequest.onComplete();
         float bestCost = float.MaxValue;
         for (int i = 0; i < newPaths.Length; i++)
         {
