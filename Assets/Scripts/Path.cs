@@ -48,11 +48,17 @@ public class Path
 {
     #region Cost logic
     //Lower = more likely to find best path, will require more processing
+    //  - Don't go lower than 1; 1 is garuanteed to find the shortest path as it will always be the shortest possible distance to the goal.
     //Higher = less likely to find the best path, reduce processing load
-    //Don't go lower than 1: 1 is garuanteed to find the shortest path as it will always be the shortest possible distance to the goal.
     const float HEURISTIC_COST_MULTIPLIER = 1f;
     
+    /// <summary>
+    /// Buffering the cost so far.
+    /// </summary>
     private float costSoFar;
+    /// <summary>
+    /// Buffering the heuristic cost.
+    /// </summary>
     private float costHeuristic;
     /// <summary>
     /// The sum of the cost-so-far and estimated future cost
@@ -70,12 +76,7 @@ public class Path
     /// <param name="heuristic"></param>
     private void CalculateCost(float heuristic)
     {
-        costSoFar = path[0].Link.distance;
-        for (int i = 1; i < path.Length; i++)
-        {
-            costSoFar += path[i].Link.distance;
-        }
-
+        costSoFar += path[^1].Link.distance; //Since we always copy the cost-so-far from the previous path, all we need to do is add the most recent node's length.
         costHeuristic = heuristic * HEURISTIC_COST_MULTIPLIER;
     }
     #endregion
@@ -84,7 +85,6 @@ public class Path
     /// <summary>
     /// The last node in this path. Cannot be changed after creation. Technically redundant, but allows for paths with 0 links to exist.
     /// </summary>
-    readonly Node endNode;
     public Node EndNode
     {
         get
@@ -92,10 +92,13 @@ public class Path
             return endNode;
         }
     }
+    readonly Node endNode;
+
     /// <summary>
     /// The node that this path is aiming to reach. This informs the heuristic calculation when the path is split.
     /// </summary>
     readonly Node targetNode;
+
     /// <summary>
     /// Whether the path reaches its target.
     /// </summary>
@@ -106,6 +109,7 @@ public class Path
             return endNode == targetNode;
         }
     }
+
     /// <summary>
     /// An array of pointed node links representing the path.
     /// </summary>
@@ -121,7 +125,7 @@ public class Path
 
     #region Constructors
     /// <summary>
-    /// This initialiser is called by Pathfinders when a path needs to be first created. All future path constructions will be handled by other paths when they split.
+    /// This constructor is called by Pathfinders when a path needs to be first created. All future path constructions will be handled by the paths themselves when they split. As such, this is the only public constructor.
     /// </summary>
     /// <param name="fromNode">The node this path will start at.</param>
     /// <param name="toNode">The node this path wants to reach.</param>
@@ -130,7 +134,7 @@ public class Path
         endNode = fromNode;
         targetNode = toNode;
         path = new PointedNodeLink[0];
-        //There is no cost-so-far, so cost is calculated purely based on heuristic. This isn't even technically necessary, but the performance penalty is so negligable, we might as well for the sake of expandability.
+        //There is no cost-so-far for the inital path, so cost is calculated purely based on heuristic. This isn't even technically necessary, but the performance penalty is so negligable, we might as well for the sake of expandability.
         costHeuristic = Vector2.Distance(fromNode.position, toNode.position);
     }
     /// <summary>
@@ -145,15 +149,19 @@ public class Path
         existingPath.path.CopyTo(path, 0);
         path[^1] = nextLink;
         endNode = nextLink.End;
+        costSoFar = existingPath.costSoFar;
     }
     #endregion
 
+    #region Multithreaded splitting process
+    /// <summary>
+    /// Tells a Path to create an array of paths that branch 1 step outwards from itself (without going backwards).
+    /// The path prepares a parallel Job that will then compute the heuristic cost for each of these new paths.
+    /// It also provides a function that will assign these heuristic costs to their respective paths, and return the now-ready paths to be added to the PriorityQueue.
+    /// </summary>
+    /// <returns>A struct containing a parallel Job that should be scheduled, and function to be called on completion.</returns>
     public SplitRequest Split()
     {
-#if UNITY_EDITOR
-        EndNode.debug_customMessage = costSoFar.ToString("0.00") +"," + costHeuristic.ToString("0.00");
-#endif
-
         List<NodeLink> availableLinks = endNode.Links.ToList();
         //An array of nodes generated, split off from this Path.
         Path[] pendingSplit = new Path[endNode.Links.Length - (path.Length > 0 ? 1 : 0)];
@@ -199,22 +207,22 @@ public class Path
             threads = pendingSplit.Length
         };
     }
+    /// <summary>
+    /// A struct containing the data that the Pathfinder will need after telling a Path to split itself.
+    /// The job is a parallel Job that the Pathfinder handles scheduling for, and the function should be called when the job completes.
+    /// The thread count also informs how many threads the Job needs.
+    /// </summary>
     public struct SplitRequest
     {
         public CalculateHeuristics job;
         public Func<Path[]> onComplete;
         public int threads;
     }
-    public Path[] OnCalculationComplete(Path[] pendingPaths, NativeArray<float> costs, NativeArray<float> positions)
-    {
-        for (int i = 0; i < costs.Length; i++)
-        {
-            pendingPaths[i].CalculateCost(costs[i]);
-        }
-        positions.Dispose();
-        costs.Dispose();
-        return pendingPaths;
-    }
+    /// <summary>
+    /// The parallel Job that calculates the heuristic cost for the given array of positions.
+    /// pos[0] and pos[1] represent target.x and target.y respectively.
+    /// All consecutive values represent the different end node positions for the paths, in their array order.
+    /// </summary>
     public struct CalculateHeuristics : IJobParallelFor
     {
         [ReadOnly] public NativeArray<float> pos;
@@ -225,4 +233,25 @@ public class Path
             costs[i] += Mathf.Sqrt(Mathf.Pow(pos[0] - pos[index], 2) + Mathf.Pow(pos[1] - pos[index + 1], 2));
         }
     }
+    /// <summary>
+    /// <para>This is a function that is passed to the Pathfinder with all the parameters already assigned to.</para>
+    /// <para>It is meant to be called after the parallel job completes, and it reads the results back and assigns the costs to the Paths created earlier.</para>
+    /// <para>This is the final step in preparing these Paths. Once the cost is assigned, the function returns the array of paths, as it is now ready to be added to the PriorityQueue.</para>
+    /// <para>The paths are not accessible to the pathfinder at any stage until this function returns them.</para>
+    /// </summary>
+    /// <param name="pendingPaths">The paths yet to have their costs assigned</param>
+    /// <param name="costs">The native array with the results of the parallel Job, for assigning and disposing.</param>
+    /// <param name="positions">The native array with the position data used by the parallel Job, for disposing.</param>
+    /// <returns>The now-ready array of Paths to be added to the PriorityQueue.</returns>
+    public Path[] OnCalculationComplete(Path[] pendingPaths, NativeArray<float> costs, NativeArray<float> positions)
+    {
+        for (int i = 0; i < costs.Length; i++)
+        {
+            pendingPaths[i].CalculateCost(costs[i]);
+        }
+        positions.Dispose();
+        costs.Dispose();
+        return pendingPaths;
+    }
+    #endregion
 }

@@ -87,7 +87,7 @@ public class GraphCreator : MonoBehaviour
         {
             yield return finder;
         }
-        debugPaths = pathfinders.Select(finder => finder.bestPath).ToArray();
+        debugPaths = pathfinders.Select(finder => finder.result).ToArray();
     }
     public IEnumerator FindPathAsync(int fromID, int toID)
     {
@@ -105,7 +105,7 @@ public class GraphCreator : MonoBehaviour
         Pathfinder activeFinder = pathfinder.CreatePathfinder(randomStart, randomEnd);
         yield return activeFinder;
 
-        debugPaths = new Path[] { activeFinder.bestPath };
+        debugPaths = new Path[] { activeFinder.result };
     }
     Path[] debugPaths;
 

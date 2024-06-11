@@ -2,72 +2,113 @@ using System.Collections.Generic;
 using Unity.Jobs;
 using UnityEngine;
 
+/// <summary>
+/// A pathfinder object handles a given pathfind operation. It inherits from CustomYieldInstuction, as it is a task that happens asynchronously and can be used to yield.
+/// </summary>
 public class Pathfinder : CustomYieldInstruction
 {
-    public Path bestPath;
+    /// <summary>
+    /// The PriorityQueue that holds all the open paths and their costs.
+    /// All split paths get added back here, and the lowest estimated cost path is repeatedly popped from the top of the queue until one of the paths are completed.
+    /// </summary>
+    private PriorityQueue<Path, float> openPaths = new();
 
-    private readonly Node origin;
-    private readonly Node target;
+    /// <summary>
+    /// Once a pathfinder completes, this result will store the best path that the pathfinder found.
+    /// </summary>
+    public Path result
+    {
+        get
+        {
+            return bestPath;
+        }
+    }
+    private Path bestPath;
 
-    private PriorityQueue<Path, float> openPaths;
+    /// <summary>
+    /// Called by the PathfinderManager when a new pathfind operation is intended to be started.
+    /// </summary>
+    /// <param name="from">The node to start at.</param>
+    /// <param name="to">The node to reach.</param>
     public Pathfinder(Node from, Node to)
     {
-        origin = from;
-        target = to;
-        openPaths = new();
+        //Create a brand new path with 0 links and enqueue it
         Path initialPath = new Path(from, to);
         openPaths.Enqueue(initialPath, initialPath.Cost);
 
 #if UNITY_EDITOR
         //These will help with visualising what's going on
-        origin.debug_customMessage = "Start";
-        target.debug_customMessage = "End";
+        from.debug_customMessage = "Start";
+        to.debug_customMessage = "End";
 #endif
     }
 
+    #region CustomYieldInstruction logic
+    /// <summary>
+    /// Used by CustomYieldInstruction to determine if it should continue to yield.
+    /// </summary>
     public override bool keepWaiting
     {
         get
         {
-            return !isDone;
+            return isBusy;
         }
     }
-    private bool isDone;
+    private bool isBusy = true;
+    #endregion
 
+    #region Path handling logic
+    /// <summary>
+    /// A buffer that holds onto the currently executing Path split request.
+    /// </summary>
     Path.SplitRequest pendingRequest;
+    /// <summary>
+    /// A buffer that holds onto the currently executing JobHandle.
+    /// </summary>
     JobHandle jobHandle;
-    List<JobHandle> openJobs = new();
+
+    /// <summary>
+    /// Takes the highest priority path, splits it, and prepares the jobs to be ran across multiple CPU threads.
+    /// </summary>
     public void PrepareJobs()
     {
-        //Get a PathRequest struct from the highest priority path, representing the result of splitting that path into a bunch of new paths
-        Path nextPath = openPaths.Dequeue();
+        //Get a SplitRequest struct from the highest priority path, representing the result of splitting that path into a bunch of new paths
+        //Grab the highest priority path, split it, and hold onto the struct representing the data we will need from it.
+        pendingRequest = openPaths.Dequeue().Split();
 
-        pendingRequest = nextPath.Split();
-
+        //Schedule the parallel Job
         jobHandle = pendingRequest.job.Schedule(pendingRequest.threads, 1);
     }
+    /// <summary>
+    /// Ensures all the jobs are completed, and evaluates the results.
+    /// </summary>
     public void FinishJobs()
     {
         //TODO: Some of the logic here is messy, find some more elegant alternatives
 
+        //Stall the main thread if the jobs aren't all complete
         jobHandle.Complete();
-        Path[] result = pendingRequest.onComplete();
-        foreach (Path path in result)
+        //Call the struct's onComplete function now that the job is done, and buffer the new paths we get returned
+        Path[] newPaths = pendingRequest.onComplete();
+        float bestCost = float.MaxValue;
+        for (int i = 0; i < newPaths.Length; i++)
         {
-            openPaths.Enqueue(path, path.Cost);
-            if (path.IsComplete)
+            float pathCost = newPaths[i].Cost; //Buffering cost since we'll always need it at least once, sometimes more. This will save picoseconds of processing but whatever
+            if (newPaths[i].IsComplete)
             {
-                isDone = true;
-                if (bestPath != null)
+                isBusy = false;
+                //Assign the path if it's the lowest cost
+                if (pathCost < bestCost)
                 {
-                    if (bestPath.Cost > path.Cost)
-                        bestPath = path;
+                    bestCost = pathCost;
+                    bestPath = newPaths[i];
                 }
-                else
-                {
-                    bestPath = path;
-                }
+            }
+            else
+            {
+                openPaths.Enqueue(newPaths[i], pathCost);
             }
         }
     }
+    #endregion
 }
