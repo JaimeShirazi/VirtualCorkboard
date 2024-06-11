@@ -259,7 +259,7 @@ public class NodeGraph
         for (int i = hitsArray.Length - 1; i >= 0; i--)
         {
             //If there was any intersections on this link
-            if (hitsArray[i] == 1)
+            if (hitsArray[i] > 0)
             {
                 //Release and remove the link
                 intercardLinks[i].Release();

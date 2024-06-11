@@ -53,6 +53,6 @@ void CSMain (uint3 id : SV_DispatchThreadID)
     //If any of thense booleans are true, there was no intersection.
     bool noIntersect = (denomCheck || alphaRangeCheck || betaRangeCheck || touchedEdges);
     
-    //Use interlocked max to prevent race conditions
-    InterlockedMax(hits[intercardIndex - offset], noIntersect ? 0 : 1);
+    //Use interlocked add to prevent race conditions
+    InterlockedAdd(hits[intercardIndex - offset], noIntersect ? 0 : 1);
 }
