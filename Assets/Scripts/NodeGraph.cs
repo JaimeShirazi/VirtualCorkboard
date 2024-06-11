@@ -191,7 +191,15 @@ public class NodeGraph
         }
 
         //Use compute shaders to cull intersecting links, and calculate their lengths. Moved this to another coroutine for the sake of organisation because it is a LOT of code.
-        yield return CullIntersectsAndGetLength();
+
+        List<NodeLink> staticLinks = new List<NodeLink>(cardLinks.Count + invalidCardLinks.Count);
+        staticLinks.AddRange(cardLinks);
+        staticLinks.AddRange(invalidCardLinks);
+
+        ShaderCheck check = new IntersectAndLengthCheck(staticLinks, intercardLinks, intersectCheckShader, lengthShader);
+        yield return check.Run();
+
+        yield return ProcessPinLinks();
 
         building = false;
         built = true;
@@ -200,123 +208,203 @@ public class NodeGraph
     /// We load the shaders once and buffer them for use later
     /// </summary>
     private ComputeShader intersectCheckShader, lengthShader;
-    private ComputeBuffer linkBuffer, hitBuffer;
-    IEnumerator CullIntersectsAndGetLength()
+    private abstract class ShaderCheck
     {
-        //Ensure we're only doing this one at a time.
-        if (linkBuffer != null || hitBuffer != null) yield break;
+        protected readonly List<NodeLink> staticLinks, dynamicLinks;
+        protected ComputeBuffer linkBuffer, hitBuffer;
 
-        #region Setup
-        //Establish some integer values repeatedly used, so we don't have to recalculate every time.
-        int offset = cardLinks.Count + invalidCardLinks.Count; //The point that splits the 2nd and 3rd array that compose Link array. This will make sense when you learn what Link Array is, next to its definition.
-        int total = offset + intercardLinks.Count; //The total amount of elements that link array will have.
-        int totalIterations = offset * (total - offset); //How many threads will need to be created to compute all the data.
+        //These all used to be local variables (this class and child classes used to all be one big IEnumerator before I needed variations of this shader check)
+        protected int offset;
+        protected int total;
+        protected int totalIterations;
+        protected float4[] linkArray;
+        protected int[] hitsArray;
 
-        //Link array a giant array of float4s representing the values shaders will use for their math.
-        //The array is more like a composite of 3 arrays, in the following order:
-        //1. The links that go around the perimeter of the cards
-        //2. The fake links around the permiter of the cards that don't actually exist, but are used for collision checking anyways.
-        //3. The huge composite of links generated between nodes.
-        //The float4 is just (A.x, A.y, B.x, B.y) where a given link is represented by line segment AB. NodeLink already defines how it should be typecasted into a float4.
-        float4[] linkArray = new float4[total];
-        //Hits array maps directly to just the 3rd part of link array, and is used to store if any collisions were detected between the first 2 parts and a given element in the 3rd part.
-        int[] hitsArray = new int[intercardLinks.Count];
-
-        //Populate link array, based on the layout which I explained in the comments next to its definition.
-        cardLinks.Select(link => (float4)link).ToArray().CopyTo(linkArray, 0);
-        invalidCardLinks.Select(link => (float4)link).ToArray().CopyTo(linkArray, cardLinks.Count);
-        intercardLinks.Select(link => (float4)link).ToArray().CopyTo(linkArray, offset);
-
-        //Create the buffers that represent the space in GPU memory the shaders will use
-        linkBuffer = new ComputeBuffer(linkArray.Length, sizeof(float) * 4);
-        hitBuffer = new ComputeBuffer(hitsArray.Length, sizeof(int));
-        //and set their data
-        linkBuffer.SetData(linkArray);
-        hitBuffer.SetData(hitsArray);
-        #endregion
-
-        #region Intersection compute shader
-        //Assign the values to the shader
-        intersectCheckShader.SetInt("offset", offset);
-        intersectCheckShader.SetInt("total", total);
-        intersectCheckShader.SetBuffer(0, "links", linkBuffer);
-        intersectCheckShader.SetBuffer(0, "hits", hitBuffer);
-        //Run the shader, with as many thread groups as needed to ensure complete coverage of all the line segments.
-        intersectCheckShader.Dispatch(0, Mathf.CeilToInt(totalIterations / 64f), 1, 1);
-
-        //Prepare an asynchronous data readback, and wait until the shader is done + the data has been read back
-        AsyncGPUReadbackRequest hitRequest = AsyncGPUReadback.Request(hitBuffer);
-        yield return new WaitUntil(() => hitRequest.done || hitRequest.hasError);
-        if (hitRequest.hasError) Debug.LogError("Encountered error attempting to fetch hit results!");
-        hitRequest.GetData<int>().CopyTo(hitsArray);
-
-        //We're going to rewrite data back into the links array buffer for the next shader, so memory doesn't have to be reallocated. We still have to rewrite to it though.
-        float4[] linksToFindLength = new float4[intercardLinks.Count];
-
-        int culledSize = 0; //How many links we've removed so far
-        int refilledCounter = 0; //How many links we've kept so far
-        //Iterating backwards through every hit
-        for (int i = hitsArray.Length - 1; i >= 0; i--)
+        /// <param name="dynamicLinks">Note: The dynamic list will be directly modified by this class. If you don't want this, make a copy that you pass through.</param>
+        public ShaderCheck(List<NodeLink> staticLinks, List<NodeLink> dynamicLinks, ComputeShader intersectShader)
         {
-            //If there was any intersections on this link
-            if (hitsArray[i] > 0)
+            this.intersectShader = intersectShader;
+            this.staticLinks = staticLinks;
+            this.dynamicLinks = dynamicLinks;
+        }
+        public abstract IEnumerator Run();
+        protected void Prepare()
+        {
+            //Establish some integer values repeatedly used, so we don't have to recalculate every time.
+            offset = staticLinks.Count(); //The point that divides the static and dynamic links, when combined.
+            total = offset + dynamicLinks.Count(); //The total amount of elements that link array will have.
+            totalIterations = offset * (total - offset); //How many threads will need to be created to compute all the data.
+
+            //Link array a giant array of float4s representing the values shaders will use for their math.
+            //The array is more like a composite of 2 arrays:
+            //1. Static links: all dynamic links are checked against each one of these.
+            //2. Dynamic links: these are the links that will be destroyed if they intersect.
+            //The float4 is just (A.x, A.y, B.x, B.y) where a given link is represented by line segment AB. NodeLink already defines how it should be typecasted into a float4.
+            linkArray = new float4[total];
+            //Hits array maps directly to just the dynamic links, and is used to store if any collisions were detected between the any of the static links and a given dynamic link.
+            hitsArray = new int[total - offset];
+
+            //Create the buffers that represent the space in GPU memory the shaders will use
+            linkBuffer = new ComputeBuffer(staticLinks.Count + dynamicLinks.Count, sizeof(float) * 4);
+            hitBuffer = new ComputeBuffer(dynamicLinks.Count, sizeof(int));
+
+            //Populate link array, based on the layout which I explained in Prepare()
+            staticLinks.Select(link => (float4)link).ToArray().CopyTo(linkArray, 0);
+            dynamicLinks.Select(link => (float4)link).ToArray().CopyTo(linkArray, offset);
+        }
+        private readonly ComputeShader intersectShader;
+        protected IEnumerator RunIntersect()
+        {
+            //Set the GPU buffer data
+            linkBuffer.SetData(linkArray);
+            hitBuffer.SetData(hitsArray);
+
+            //Assign the values to the shader
+            intersectShader.SetInt("offset", offset);
+            intersectShader.SetInt("total", total);
+            intersectShader.SetBuffer(0, "links", linkBuffer);
+            intersectShader.SetBuffer(0, "hits", hitBuffer);
+            //Run the shader, with as many thread groups as needed to ensure complete coverage of all the line segments.
+            intersectShader.Dispatch(0, Mathf.CeilToInt(totalIterations / 64f), 1, 1);
+
+            //Prepare an asynchronous data readback, and wait until the shader is done + the data has been read back
+            AsyncGPUReadbackRequest hitRequest = AsyncGPUReadback.Request(hitBuffer);
+            yield return new WaitUntil(() => hitRequest.done || hitRequest.hasError);
+            if (hitRequest.hasError) Debug.LogError("Encountered error attempting to fetch hit results!");
+
+            hitRequest.GetData<int>().CopyTo(hitsArray);
+            hitBuffer.Release();
+        }
+    }
+    private class IntersectCheck : ShaderCheck
+    {
+        /// <param name="dynamicLinks">Note: The dynamic list will be directly modified by this class. If you don't want this, make a copy that you pass through.</param>
+        public IntersectCheck(List<NodeLink> staticLinks, List<NodeLink> dynamicLinks, ComputeShader intersectShader) : base (staticLinks, dynamicLinks, intersectShader) { }
+        public override IEnumerator Run()
+        {
+            Prepare();
+            yield return RunIntersect();
+            for (int i = hitsArray.Length - 1; i >= 0; i--)
             {
-                //Release and remove the link
-                intercardLinks[i].Release();
-                intercardLinks.RemoveAt(i);
-                culledSize++;
+                //If there was any intersections on this link
+                if (hitsArray[i] > 0)
+                {
+                    //Release and remove the link
+                    dynamicLinks[i].Release();
+                    dynamicLinks.RemoveAt(i);
+                }
             }
-            else
+            linkBuffer.Release();
+        }
+    }
+    private class IntersectAndLengthCheck : ShaderCheck
+    {
+        private readonly ComputeShader lengthShader;
+        public IntersectAndLengthCheck(List<NodeLink> staticLinks, List<NodeLink> dynamicLinks, ComputeShader intersectShader, ComputeShader lengthShader) : base (staticLinks, dynamicLinks, intersectShader)
+        {
+            this.lengthShader = lengthShader;
+        }
+        public override IEnumerator Run()
+        {
+            Prepare();
+
+            yield return RunIntersect();
+
+            //Creating a temp buffer to store all the remaining links
+            float4[] linksToFindLength = new float4[dynamicLinks.Count];
+
+            total = 0; //Redefining the total to be all the remaining links
+            //Iterating backwards through every hit
+            for (int i = hitsArray.Length - 1; i >= 0; i--)
             {
-                //Populate the new array with the data from this link
-                linksToFindLength[refilledCounter] = linkArray[i + offset];
-                refilledCounter++;
+                //If there was any intersections on this link
+                if (hitsArray[i] > 0)
+                {
+                    //Release and remove the link
+                    dynamicLinks[i].Release();
+                    dynamicLinks.RemoveAt(i);
+                }
+                else
+                {
+                    //Populate the new array with the data from this link
+                    linksToFindLength[total] = linkArray[i + offset];
+                    total++;
+                }
+            }
+            linkArray = linksToFindLength;
+
+            yield return RunLength();
+
+            //Feed the calculated distance values into their respective links.
+            for (int i = 0; i < total; i++)
+            {
+                //We actually filled the data into the length shader backwards, so here we're inverting the order.
+                dynamicLinks[total - i - 1].distance = linkArray[i].x;
             }
         }
-
-        //Release the hit buffer data and get rid of it
-        hitBuffer.Release();
-        hitBuffer = null;
-        #endregion
-
-        #region Length compute shader
-        //Assign the new link array data to the buffer we used for the last shader
-        linkBuffer.SetData(linksToFindLength, 0, 0, refilledCounter);
-
-        //Assign that buffer to the length shader, and dispatch it with as little thread groups needed to ensure complete coverage.
-        lengthShader.SetBuffer(0, "links", linkBuffer);
-        lengthShader.Dispatch(0, Mathf.CeilToInt(refilledCounter / 64f), 1, 1);
-
-        //Prepare an asynchronous data readback, and wait until the shader is done + the data has been read back
-        AsyncGPUReadbackRequest lengthRequest = AsyncGPUReadback.Request(linkBuffer);
-        yield return new WaitUntil(() => lengthRequest.done || lengthRequest.hasError);
-        if (lengthRequest.hasError) Debug.LogError("Encountered error attempting to fetch link distance results!");
-        linksToFindLength = lengthRequest.GetData<float4>().ToArray();
-
-        //Feed the calculated distance values into their respective links.
-        for (int i = 0; i < refilledCounter; i++)
+        IEnumerator RunLength()
         {
-            //We actually filled the data into the length shader backwards, so here we're inverting the order.
-            intercardLinks[refilledCounter - i - 1].distance = linksToFindLength[i].x;
+            //Assign the new link array data to the buffer we used for the last shader
+            linkBuffer.SetData(linkArray, 0, 0, total);
 
-            //This is just used for the render function, which will be removed later.
-            debugShortest = Mathf.Min(debugShortest, linksToFindLength[i].x);
-            debugLongest = Mathf.Max(debugLongest, linksToFindLength[i].x);
+            //Assign that buffer to the length shader, and dispatch it with as little thread groups needed to ensure complete coverage.
+            lengthShader.SetBuffer(0, "links", linkBuffer);
+            lengthShader.Dispatch(0, Mathf.CeilToInt(total / 64f), 1, 1);
+
+            //Prepare an asynchronous data readback, and wait until the shader is done + the data has been read back
+            AsyncGPUReadbackRequest lengthRequest = AsyncGPUReadback.Request(linkBuffer);
+            yield return new WaitUntil(() => lengthRequest.done || lengthRequest.hasError);
+            if (lengthRequest.hasError) Debug.LogError("Encountered error attempting to fetch link distance results!");
+            linkArray = lengthRequest.GetData<float4>().ToArray();
+            linkBuffer.Release();
         }
-
-        //Free the link buffer's resources and null its value.
-        linkBuffer.Release();
-        linkBuffer = null;
-        #endregion
     }
     #endregion
 
+    /// <summary>
+    /// Initially, all pin-to-pin links are just direct paths from one side to the other.
+    /// We need to check if these initial paths are creating intersections, and cull the ones that are, to be replaced with one that we use pathfinding algorithms to generate.
+    /// </summary>
+    /// <returns></returns>
+    public IEnumerator ProcessPinLinks()
+    {
+        //First, we check if the pins are intersecting with any walls using the same GPU-accelerated approach we used with the other nodes.
+        List<NodeLink> pinList = pinLinks.Values.ToList();
+        ShaderCheck check = new IntersectCheck(cardLinks, pinList, intersectCheckShader);
+        yield return check.Run();
+
+        //QUICK AND DIRTY REMOVE METHOD -- FIND SOMETHING BETTER THAT INVOLVES LESS ITERATION
+        for (int i = pinLinks.Keys.Count - 1; i >= 0; i--)
+        {
+            ulong key = pinLinks.Keys.ToArray()[i];
+            if (!pinList.Contains(pinLinks[key]))
+            {
+                pinLinks.Remove(key);
+            }
+            //pinLinks.Remove(pinLinks.First(x => x.Value == pinList[i]).Key);
+        }
+
+        //Then we check the pin nodes against each other. We do not do this in parallel because we want to be able to remove an intersecting link, and stop using that link for collision checks with the other pins. This is necessarily sequential.
+
+        //We now enter a loop:
+        //We branch, and use pathfinding to find the best path for each pin-to-pin link we no longer have.
+        //Using an analysis algorithm, we will pick which path to go with.
+        //We will then remove the links that path used from the list of available links.
+        //For the pins that we removed, we will also generate new nodes and links around them, by expanding the shape of the cards and using some other simple algorithms
+        //This loop will break once there are no longer any missing pin-to-pin links.
+    }
+
     #region Debug functions that will be removed
     //Everything with "debug" in front of it is temporary and will be removed before the end of the project
-    private float debugShortest = float.MaxValue;
-    private float debugLongest = float.MinValue;
     public void DebugRender(Vector3 offset, bool renderCards, bool renderPins, bool renderIntercards, Path[] withPaths)
     {
+        if (renderIntercards)
+        {
+            foreach (NodeLink intercardLink in intercardLinks)
+            {
+                Debug.DrawLine(intercardLink.StartPos + offset, intercardLink.EndPos + offset, Color.Lerp(Color.green, Color.red, intercardLink.distance / 14f));
+            }
+        }
         if (renderCards)
         {
             foreach (NodeLink cardLink in cardLinks)
@@ -329,13 +417,6 @@ public class NodeGraph
             foreach (NodeLink pinLink in pinLinks.Values)
             {
                 Debug.DrawLine(pinLink.StartPos + offset, pinLink.EndPos + offset, Color.cyan);
-            }
-        }
-        if (renderIntercards)
-        {
-            foreach (NodeLink intercardLink in intercardLinks)
-            {
-                Debug.DrawLine(intercardLink.StartPos + offset, intercardLink.EndPos + offset, Color.Lerp(Color.green, Color.red, (intercardLink.distance - debugShortest) / debugLongest));
             }
         }
         if (withPaths != null)
