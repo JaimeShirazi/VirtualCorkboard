@@ -1,5 +1,7 @@
+using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
+using System.Linq;
 using Unity.VisualScripting;
 using UnityEngine;
 
@@ -53,18 +55,61 @@ public class Card
     }
     List<Card> links;
     List<Edge> linksTargetEdge;
+    /// <summary>
+    /// Adds a link between this card and the given card.
+    /// </summary>
+    /// <param name="to">The target card.</param>
     public void AddLink(Card to)
     {
         if (to == this) return;
 
-        Edge targetEdgeBuffer = Edge.North;
-        //TODO: Implement logic for calculating the target edge based on the position of the card relative to this card
-        Debug.LogWarning("Logic for calculating target edge for pin has not been implemented!");
-        linksTargetEdge.Add(targetEdgeBuffer);
+        //Calculate the target edge using the shapes of the two cards
+        linksTargetEdge.Add(TargetSide(shape, to.shape));
 
+        //Add the card to a buffer tracking all the cards this card has links to.
         links.Add(to);
 
         dataIsStale = true; //Internally mark that this card needs its data regenerated before being read by other objects
+    }
+    /// <summary>
+    /// Returns the best-fit edge for the first rect to link to the second rect.
+    /// </summary>
+    /// <param name="from">The card to find the best edge for</param>
+    /// <param name="to">The card that this edge will link to</param>
+    /// <returns>The best-fit edge</returns>
+    /// <exception cref="IndexOutOfRangeException"></exception>
+    Edge TargetSide(Rect from, Rect to)
+    {
+        //Distance between the rect edges, ordered NESW
+        float[] distance = new float[4];
+        distance[0] = to.yMin - from.yMax;
+        distance[1] = to.xMin - from.xMax;
+        distance[2] = from.yMin - to.yMax;
+        distance[3] = from.xMin - to.xMax;
+
+        int bestIndex = -1;
+        float bestValue = float.MinValue;
+        for (int i = 0; i < 4; i++)
+        {
+            if (distance[i] > 0)
+            {
+                if (distance[i] > bestValue)
+                {
+                    bestValue = distance[i];
+                    bestIndex = i;
+                }
+            }
+        }
+
+        return bestIndex switch
+        {
+            0 => Edge.North,
+            1 => Edge.East,
+            2 => Edge.South,
+            3 => Edge.West,
+            -1 => Edge.North, //A card is clipping, but I would rather it fails silently than it completely stops execution
+            _ => throw new IndexOutOfRangeException("Recieved a greatest distance edge value that shouldn't be possible.")
+        };
     }
     public void RemoveLink(Card to)
     {
