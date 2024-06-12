@@ -7,6 +7,10 @@ using UnityEngine.Rendering;
 
 public class NodeGraph
 {
+    const string STATIC_DYNAMIC_INTERSECT_SHADER = "StaticDynamicLinkIntersectCheck";
+    const string DYNAMIC_INTERSECT_SHADER = "DynamicLinkIntersectCheck";
+    const string LINE_LENGTH_SHADER_PATH = "LineSegmentLengthCalculator";
+
     #region Inputted data. All the other lists of nodes and links are pulled from this data and/or generated internally.
     /// <summary>
     /// The cards in this nodegraph. This is one of the two things that other objects add to this node graph.
@@ -147,8 +151,8 @@ public class NodeGraph
         ResourceRequest loadLengthShader = null;
         if (loadingShaders)
         {
-            loadIntersectShader = Resources.LoadAsync("LineSegmentIntersectCheck", typeof(ComputeShader));
-            loadLengthShader = Resources.LoadAsync("LineSegmentLengthCalculator", typeof(ComputeShader));
+            loadIntersectShader = Resources.LoadAsync(STATIC_DYNAMIC_INTERSECT_SHADER, typeof(ComputeShader));
+            loadLengthShader = Resources.LoadAsync(LINE_LENGTH_SHADER_PATH, typeof(ComputeShader));
         }
 
         ClearBufferedData();
