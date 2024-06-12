@@ -84,8 +84,6 @@ public class Pathfinder : CustomYieldInstruction
     /// </summary>
     public void FinishJobs()
     {
-        //TODO: Some of the logic here is messy, find some more elegant alternatives
-
         //Stall the main thread if the jobs aren't all complete
         jobHandle.Complete();
         //Call the struct's onComplete function now that the job is done, and buffer the new paths we get returned
@@ -106,7 +104,8 @@ public class Pathfinder : CustomYieldInstruction
             }
             else
             {
-                openPaths.Enqueue(newPaths[i], pathCost);
+                if (!newPaths[i].IsDead)
+                    openPaths.Enqueue(newPaths[i], pathCost);
             }
         }
     }

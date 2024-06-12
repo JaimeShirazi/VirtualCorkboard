@@ -139,6 +139,16 @@ public class NavPath : PathFramework
             return endNode == targetNode;
         }
     }
+    /// <summary>
+    /// Whether a path does not lead anywhere.
+    /// </summary>
+    public bool IsDead
+    {
+        get
+        {
+            return (endNode.Links.Length < 1);
+        }
+    }
 
     #region Constructors
     /// <summary>
