@@ -16,6 +16,10 @@ public class GraphCreator : MonoBehaviour
     {
         StartCoroutine(graph.Build());
     }
+    public void RepairPinLinks()
+    {
+        StartCoroutine(graph.ProcessPinLinks());
+    }
     //Dirty random card generator that avoids intersecting cards, this is just for the sake of testing
     public void CreateRandomCardLayout(int amount)
     {
@@ -226,6 +230,15 @@ public class GraphCreatorEditor : Editor
             foreach (GraphCreator graphCreator in components)
             {
                 graphCreator.BuildGraph();
+            }
+        }
+
+        EditorGUILayout.Space(8);
+        if (GUILayout.Button("Repair pin links"))
+        {
+            foreach (GraphCreator graphCreator in components)
+            {
+                graphCreator.RepairPinLinks();
             }
         }
 

@@ -185,7 +185,7 @@ public class NodeGraphShaderManager
         protected IEnumerator RunIntersectShader()
         {
             //Run the shader, with as many thread groups as needed to ensure complete coverage of all the line segments.
-            intersectShader.Dispatch(0, Mathf.CeilToInt(totalIterations / 64f), 1, 1);
+            intersectShader.Dispatch(0, Mathf.Max(Mathf.CeilToInt(totalIterations / 64f), 1), 1, 1);
 
             //Prepare an asynchronous data readback, and wait until the shader is done + the data has been read back
             AsyncGPUReadbackRequest hitRequest = AsyncGPUReadback.Request(hitBuffer);
@@ -382,17 +382,20 @@ public class NodeGraphShaderManager
             intersectShader = manager.dynamicCheckShader;
 
             InitialiseValues();
-            bool[] removeLink = new bool[hitsArray.Length];
+            bool[] removeLink = new bool[total];
             while (true)
             {
                 yield return RunDIntersect();
+                int mostHits = 0;
                 int mostHitsIndex = -1;
-                for (int i = hitsArray.Length - 1; i >= 0; i--)
+                for (int i = total - 1; i >= 0; i--)
                 {
-                    if (hitsArray[i] > hitsArray[mostHitsIndex])
+                    if (hitsArray[i] > mostHits)
                     {
+                        mostHits = hitsArray[i];
                         mostHitsIndex = i;
                     }
+                    hitsArray[i] = 0; //Reset the hit count for the next run
                 }
                 if (mostHitsIndex < 0)
                 {
@@ -402,7 +405,6 @@ public class NodeGraphShaderManager
                 {
                     removeLink[mostHitsIndex] = true;
                     linkArray[mostHitsIndex] = new float4(0, 0, 0, 0); //Setting it to be a none-segment so it doesn't contribute to the next collision checks
-                    yield return RunDIntersect();
                 }
             }
 

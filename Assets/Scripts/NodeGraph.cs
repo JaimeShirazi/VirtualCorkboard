@@ -179,7 +179,7 @@ public class NodeGraph
         staticLinks.AddRange(invalidCardLinks);
         yield return shaderManager.DoSDCheckAndAssignLengths(staticLinks, intercardLinks);
 
-        yield return ProcessPinLinks();
+        //yield return ProcessPinLinks();
 
         building = false;
         built = true;
@@ -196,7 +196,11 @@ public class NodeGraph
         //First, we check if the pins are intersecting with any walls using the same GPU-accelerated approach we used with the other nodes.
         List<NodeLink> pinList = pinLinks.Values.ToList();
 
+        //Cull the pin links that intersect with card edges
         yield return shaderManager.DoSDCheck(cardLinks, pinList);
+
+        //Cull the least possible pin links so that no pin links intersect with each other 
+        yield return shaderManager.DoDChecks(pinList);
 
         //QUICK AND DIRTY REMOVE METHOD -- FIND SOMETHING BETTER THAT INVOLVES LESS ITERATION
         for (int i = pinLinks.Keys.Count - 1; i >= 0; i--)
@@ -209,7 +213,9 @@ public class NodeGraph
             }
         }
 
-        //Then we check the pin nodes against each other.
+        //Remove all intercard links that intersect with the remaining pin links
+        yield return shaderManager.DoSDCheck(pinList, intercardLinks);
+
         //Then we do another SD check with the intercard links and cull everything that intersects with the remaining pin nodes.
 
         //We now enter a loop:
