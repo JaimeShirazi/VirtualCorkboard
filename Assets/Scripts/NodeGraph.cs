@@ -172,6 +172,26 @@ public class NodeGraph
                 }
             }
         }
+        yield return new WaitForSeconds(4);
+
+        /*//Generate a bunch of nodes from pins to cards
+        //THIS ALSO NEEDS A REWORK -- TO BE REWRITTEN AFTER THE WHOLE SYSTEM WORKS
+        for (int a = 0; a < nodesBuffer.Count; a++)
+        {
+            if (nodesBuffer[a].isPin)
+            {
+                for (int b = 0; b < nodesBuffer.Count; b++)
+                {
+                    if (!nodesBuffer[b].isPin)
+                    {
+                        if (nodesBuffer[a].card != nodesBuffer[b].card)
+                        {
+                            intercardLinks.Add(new NodeLink(nodesBuffer[a], nodesBuffer[b]));
+                        }
+                    }
+                }
+            }
+        }*/
 
         //Use compute shaders to cull intersecting links, and calculate their lengths.
         List<NodeLink> staticLinks = new List<NodeLink>(cardLinks.Count + invalidCardLinks.Count);
@@ -191,7 +211,7 @@ public class NodeGraph
     /// We need to check if these initial paths are creating intersections, and cull the ones that are, to be replaced with one that we use pathfinding algorithms to generate.
     /// </summary>
     /// <returns></returns>
-    public IEnumerator ProcessPinLinks()
+    public IEnumerator ProcessPinLinks(PathfinderManager pathfinderManager)
     {
         //First, we check if the pins are intersecting with any walls using the same GPU-accelerated approach we used with the other nodes.
         List<NodeLink> pinList = pinLinks.Values.ToList();
@@ -202,7 +222,7 @@ public class NodeGraph
         //Cull the least possible pin links so that no pin links intersect with each other 
         yield return shaderManager.DoDChecks(pinList);
 
-        //QUICK AND DIRTY REMOVE METHOD -- FIND SOMETHING BETTER THAT INVOLVES LESS ITERATION
+        //QUICK AND DIRTY REMOVE METHOD -- TO BE REWRITTEN AFTER THE WHOLE SYSTEM WORKS
         for (int i = pinLinks.Keys.Count - 1; i >= 0; i--)
         {
             ulong key = pinLinks.Keys.ToArray()[i];
@@ -216,14 +236,43 @@ public class NodeGraph
         //Remove all intercard links that intersect with the remaining pin links
         yield return shaderManager.DoSDCheck(pinList, intercardLinks);
 
-        //Then we do another SD check with the intercard links and cull everything that intersects with the remaining pin nodes.
-
         //We now enter a loop:
         //We branch, and use pathfinding to find the best path for each pin-to-pin link we no longer have.
         //Using an analysis algorithm, we will pick which path to go with.
         //We will then remove the links that path used from the list of available links.
         //For the pins that we removed, we will also generate new nodes and links around them, by expanding the shape of the cards and using some other simple algorithms
         //This loop will break once there are no longer any missing pin-to-pin links.
+
+        List<NodeLink> missingLinks = new();
+        List<ulong> missingLinksKeys = new();
+        List<Pathfinder> missingLinksPathfinders = new();
+
+        //QUICK AND DIRTY METHOD FOR GETTING THE DESTROYED PIN LINKS -- TO BE REWRITTEN AFTER THE WHOLE SYSTEM WORKS
+        //If I do not have time to replace this I am going to be extremely upset
+        for (int i = pinLinks.Keys.Count - 1; i >= 0; i--)
+        {
+            ulong key = pinLinks.Keys.ToArray()[i];
+            if (!pinList.Contains(pinLinks[key]))
+            {
+                missingLinks.Add(pinLinks[key]);
+                missingLinksKeys.Add(key);
+            }
+        }
+
+        for (int i = 0; i < missingLinks.Count; i++)
+        {
+            missingLinksPathfinders.Add(pathfinderManager.CreatePathfinder(missingLinks[i].start, missingLinks[i].end));
+        }
+        for (int i = 0; i < missingLinksPathfinders.Count; i++)
+        {
+            yield return missingLinksPathfinders;
+        }
+        for (int i = 0; i < missingLinksPathfinders.Count; i++)
+        {
+            if (missingLinksPathfinders[i].Result == null)
+                Debug.Log("Null reference!");
+            pinRoutes.Add(missingLinksKeys[i], missingLinksPathfinders[i].Result);
+        }
     }
 
     #region Debug functions that will be removed

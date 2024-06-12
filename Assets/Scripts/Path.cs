@@ -272,6 +272,7 @@ public class NavPath : PathFramework
         }
         positions.Dispose();
         costs.Dispose();
+
         return pendingPaths;
     }
     #endregion

@@ -16,7 +16,7 @@ public class Pathfinder : CustomYieldInstruction
     /// <summary>
     /// Once a pathfinder completes, this result will store the best path that the pathfinder found.
     /// </summary>
-    public NavPath result
+    public NavPath Result
     {
         get
         {
@@ -95,6 +95,8 @@ public class Pathfinder : CustomYieldInstruction
             if (newPaths[i].IsComplete)
             {
                 isBusy = false;
+
+                Debug.Log("No longer busy, and path cost is " + pathCost);
                 //Assign the path if it's the lowest cost
                 if (pathCost < bestCost)
                 {
@@ -102,10 +104,9 @@ public class Pathfinder : CustomYieldInstruction
                     bestPath = newPaths[i];
                 }
             }
-            else
+            else if (!newPaths[i].IsDead)
             {
-                if (!newPaths[i].IsDead)
-                    openPaths.Enqueue(newPaths[i], pathCost);
+                openPaths.Enqueue(newPaths[i], pathCost);
             }
         }
     }

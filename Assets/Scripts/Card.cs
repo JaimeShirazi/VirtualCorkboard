@@ -268,6 +268,11 @@ public class Card
                     //Create a new node at a position along the edge based on order
                     pinNodes[links.IndexOf(orderedLinksBuffer[i])] = new Node(graph, this, PinPositionCalculator(edge, distribution), true);
                 }
+
+                //Create links between the corners of the edge and the leftmost/rightmost pin links
+                cornerLinks.Add(new NodeLink(GetFirstCornerNode(edge), pinNodes[links.IndexOf(orderedLinksBuffer[0])]));
+                cornerLinks.Add(new NodeLink(pinNodes[links.IndexOf(orderedLinksBuffer[^1])], GetLastCornerNode(edge)));
+
                 //These are generated for the sake of collision testing, not as valid pathways for strings.
                 invalidCornerLinks.Add(new NodeLink(GetFirstCornerNode(edge), GetLastCornerNode(edge)));
                 //Generate the distance values for the edge anyways to avoid potential bugs if the code is modified later, i doubt this adds much overhead anyways

@@ -18,7 +18,7 @@ public class GraphCreator : MonoBehaviour
     }
     public void RepairPinLinks()
     {
-        StartCoroutine(graph.ProcessPinLinks());
+        StartCoroutine(graph.ProcessPinLinks(pathfinder));
     }
     //Dirty random card generator that avoids intersecting cards, this is just for the sake of testing
     public void CreateRandomCardLayout(int amount)
@@ -91,7 +91,7 @@ public class GraphCreator : MonoBehaviour
         {
             yield return finder;
         }
-        debugPaths = pathfinders.Select(finder => finder.result).ToArray();
+        debugPaths = pathfinders.Select(finder => finder.Result).ToArray();
     }
     public IEnumerator FindPathAsync(int fromID, int toID)
     {
@@ -109,7 +109,7 @@ public class GraphCreator : MonoBehaviour
         Pathfinder activeFinder = pathfinder.CreatePathfinder(randomStart, randomEnd);
         yield return activeFinder;
 
-        debugPaths = new NavPath[] { activeFinder.result };
+        debugPaths = new NavPath[] { activeFinder.Result };
     }
     NavPath[] debugPaths;
 
