@@ -21,6 +21,27 @@ bool ApproxEquals(float2 a, float2 b, float epsilon = 0.0001f)
     return length(a - b) < epsilon;
 }
 
+int2 CalculateXY(int index)
+{
+    int X;
+
+    int columnValuesSum = 0; //will sum the total pairs row-by-row
+    //Iterate through the x axis
+    for (X = 0; X < total; X++)
+    {
+        columnValuesSum += total - 1 - X; //Sum the amount of values in this column
+        if (index < columnValuesSum) //If the index has was before the end of this column
+        {
+            break;
+        }
+    }
+
+    //The Y can be found by getting the index and subtracting the amount of elements before the start of this column
+    int Y = index - columnValuesSum + total;
+
+    return int2(X, Y);
+}
+
 //We're still doing this using a 1-dimensional approach, using a set of calculations to transform this into X and Y coordinates on a triangular array.
 //This triangular array consists of all the line segments mirrored on both axis, and ignores situations where X=Y as well.
 //This is essentially an (n-1)x(n-1) triangular table where n is the total amount of line segments.
@@ -28,29 +49,12 @@ bool ApproxEquals(float2 a, float2 b, float epsilon = 0.0001f)
 [numthreads(64,1,1)]
 void CSMain (uint3 id : SV_DispatchThreadID)
 {
-    int totalPairs = total * (total - 1) / 2;
-    
-    int row = 0;
-    int rowsTotalCounter = 0; //will sum the total pairs row-by-row
-    //For each element in the list
-    for (int i = 1; i < total; ++i)
-    {
-        //Add the total element count minus the Y value to a buffer
-        rowsTotalCounter += total - i;
-        if (id.x < rowsTotalCounter)
-        {
-            row = i - 1;
-            break;
-        }
-    }
-    
-    /*int intercardIndex = (id.x / offset) + offset;
-    int cardIndex = id.x % offset;
+    int2 indexes = CalculateXY(id.x);
 
-    float2 A = links[intercardIndex].xy;
-    float2 B = links[intercardIndex].zw;
-    float2 C = links[cardIndex].xy;
-    float2 D = links[cardIndex].zw;
+    float2 A = links[indexes.x].xy;
+    float2 B = links[indexes.x].zw;
+    float2 C = links[indexes.y].xy;
+    float2 D = links[indexes.y].zw;
 
     float2 a = B - A;
     float2 b = C - D;
@@ -63,15 +67,14 @@ void CSMain (uint3 id : SV_DispatchThreadID)
     bool denomCheck = denominator < 0.0001f && denominator > -0.0001f;
     bool alphaRangeCheck = FastIntersectCheck(alphaNumerator, denominator);
     bool betaRangeCheck = FastIntersectCheck(betaNumerator, denominator);
-
-    //The points were touching at the edges, so we should ignore the "collision".
-    //We can always assume for our use case that lines that share end points shouldn't be culled.
-    //Remove this if you want a collision detection algorithm that won't ignore lines that touch at endpoints
-    bool touchedEdges = (ApproxEquals(A, C) || ApproxEquals(A, D) || ApproxEquals(B, C) || ApproxEquals(B, D));
+    
+    bool zeroLengthCheck = (a.x == 0 && a.y == 0) || (b.x == 0 && b.y == 0);
 
     //If any of thense booleans are true, there was no intersection.
-    bool noIntersect = (denomCheck || alphaRangeCheck || betaRangeCheck || touchedEdges);
+    bool noIntersect = (denomCheck || alphaRangeCheck || betaRangeCheck || zeroLengthCheck);
     
+    int resultAddDelta = noIntersect ? 0 : 1;
     //Use interlocked add to prevent race conditions
-    InterlockedAdd(hits[intercardIndex - offset], noIntersect ? 0 : 1);*/
+    InterlockedAdd(hits[indexes.x], resultAddDelta);
+    InterlockedAdd(hits[indexes.y], resultAddDelta);
 }
