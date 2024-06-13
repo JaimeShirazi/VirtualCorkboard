@@ -323,7 +323,7 @@ public class NodeGraphShaderManager
 
             //Assign that buffer to the length shader, and dispatch it with as little thread groups needed to ensure complete coverage.
             lengthShader.SetBuffer(0, "links", linkBuffer);
-            lengthShader.Dispatch(0, Mathf.CeilToInt(total / 64f), 1, 1);
+            lengthShader.Dispatch(0, Mathf.Max(Mathf.CeilToInt(total / 64f), 1), 1, 1);
 
             //Prepare an asynchronous data readback, and wait until the shader is done + the data has been read back
             AsyncGPUReadbackRequest lengthRequest = AsyncGPUReadback.Request(linkBuffer);

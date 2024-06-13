@@ -25,9 +25,29 @@ bool ApproxEquals(float2 a, float2 b, float epsilon = 0.0001f)
 {
     return length(a - b) < epsilon;
 }
+//This function assumes that C and D are the static coordinates that are axis-aligned (card borders). If both lines were at unknown angles, this function would break.
+//with = the values that we're comparing against
+//along axis = the values perpendicular to the axis that we're checking for alignment on
+//on axis = the values on the axis we're checking for alignment
+//e.g, if the axis we were checking was Y (the card edge is north or south), along axis would be the X values, and on axis would be the Y
+bool AxisAligned(float alongAxis, float onAxis, float withAlongAxis1, float withAlongAxis2, float withOnAxis, float epsilon = 0.0001f)
+{
+    return (alongAxis >= min(withAlongAxis1, withAlongAxis2))
+        && (alongAxis <= max(withAlongAxis1, withAlongAxis2))
+        && ApproxEquals(onAxis, withOnAxis);
+}
 bool ApproxAligned(float2 A, float2 B, float2 C, float2 D)
 {
-    return (ApproxEquals(A.x, C.x) && ApproxEquals(B.x, D.x)) || (ApproxEquals(A.y, C.y) && ApproxEquals(B.y, D.y));
+    if (ApproxEquals(C.y, D.y))
+    {
+        return AxisAligned(A.x, A.y, C.x, D.x, C.y)
+            || AxisAligned(B.x, B.y, C.x, D.x, C.y);
+    }
+    else
+    {
+        return AxisAligned(A.y, A.x, C.y, D.y, C.x)
+            || AxisAligned(B.y, B.x, C.y, D.y, C.x);
+    }
 }
 
 [numthreads(64,1,1)]
@@ -58,7 +78,7 @@ void CSMain (uint3 id : SV_DispatchThreadID)
     //Remove this if you want a collision detection algorithm that won't ignore lines that touch at endpoints
     bool touchedEdges = (ApproxEquals(A, C) || ApproxEquals(A, D) || ApproxEquals(B, C) || ApproxEquals(B, D));
     
-    //We also want to ignore collisions where at least one of the axis has all of the points touching
+    //We also want to ignore collisions where a dynamic line's endpoint is aligned with the static line
     bool endsAligned = (ApproxAligned(A, B, C, D) || ApproxAligned(A, B, D, C));
     
     //If any of thense booleans are true, there was no intersection.

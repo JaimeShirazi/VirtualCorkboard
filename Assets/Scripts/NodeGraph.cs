@@ -172,26 +172,6 @@ public class NodeGraph
                 }
             }
         }
-        yield return new WaitForSeconds(4);
-
-        /*//Generate a bunch of nodes from pins to cards
-        //THIS ALSO NEEDS A REWORK -- TO BE REWRITTEN AFTER THE WHOLE SYSTEM WORKS
-        for (int a = 0; a < nodesBuffer.Count; a++)
-        {
-            if (nodesBuffer[a].isPin)
-            {
-                for (int b = 0; b < nodesBuffer.Count; b++)
-                {
-                    if (!nodesBuffer[b].isPin)
-                    {
-                        if (nodesBuffer[a].card != nodesBuffer[b].card)
-                        {
-                            intercardLinks.Add(new NodeLink(nodesBuffer[a], nodesBuffer[b]));
-                        }
-                    }
-                }
-            }
-        }*/
 
         //Use compute shaders to cull intersecting links, and calculate their lengths.
         List<NodeLink> staticLinks = new List<NodeLink>(cardLinks.Count + invalidCardLinks.Count);
