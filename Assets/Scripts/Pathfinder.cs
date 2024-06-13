@@ -35,12 +35,6 @@ public class Pathfinder : CustomYieldInstruction
         //Create a brand new path with 0 links and enqueue it
         NavPath initialPath = new NavPath(from, to);
         openPaths.Enqueue(initialPath, initialPath.Cost);
-
-#if UNITY_EDITOR
-        //These will help with visualising what's going on
-        from.debug_customMessage = "Start";
-        to.debug_customMessage = "End";
-#endif
     }
 
     #region CustomYieldInstruction logic
@@ -104,40 +98,24 @@ public class Pathfinder : CustomYieldInstruction
     {
         //Get a SplitRequest struct from the highest priority path, representing the result of splitting that path into a bunch of new paths
         //Grab the highest priority path, split it, and hold onto the struct representing the data we will need from it.
-        NavPath nextPath = null;
         while (pendingRequest.IsInvalid())
         {
-            nextPath = openPaths.Dequeue();
-            pendingRequest = nextPath.Split(this);
+            pendingRequest = openPaths.Dequeue().Split(this);
         }
-
-        DEBUG_originalCost = nextPath.Cost;
 
         //Schedule the parallel Job
         jobHandle = pendingRequest.job.Schedule(pendingRequest.threads, 1);
     }
-    private float DEBUG_originalCost;
     /// <summary>
     /// Ensures all the jobs are completed, and evaluates the results.
     /// </summary>
-    public System.Collections.IEnumerator FinishJobs()
+    public void FinishJobs()
     {
         //Stall the main thread if the jobs aren't all complete
         jobHandle.Complete();
         //Call the struct's onComplete function now that the job is done, and buffer the new paths we get returned
         NavPath[] newPaths = pendingRequest.onComplete();
         float bestCost = float.MaxValue;
-
-        List<Node> debug_customMessagesToRemove = new()
-        {
-            newPaths[0].GetOrderedNodeArray()[0]
-        };
-        debug_customMessagesToRemove[^1].debug_customMessage = "Start\n" + DEBUG_originalCost.ToString("00.00");
-        for (int j = 0; j < newPaths[0].GetOrderedNodeArray().Length - 2; j++)
-        {
-            Debug.DrawLine(newPaths[0].GetOrderedNodeArray()[j].position, newPaths[0].GetOrderedNodeArray()[j + 1].position, Color.green, 0.2f);
-        }
-
         for (int i = 0; i < newPaths.Length; i++)
         {
             float pathCost = newPaths[i].Cost; //Buffering cost since we'll always need it at least once, sometimes more. This will save picoseconds of processing but whatever
@@ -148,29 +126,13 @@ public class Pathfinder : CustomYieldInstruction
                 {
                     bestCost = pathCost;
                     bestPath = newPaths[i];
-
-#if UNITY_EDITOR
-                    Debug.DrawLine(newPaths[i].GetOrderedNodeArray()[^2].position, newPaths[i].GetOrderedNodeArray()[^1].position, Color.yellow, 0.2f);
-                    debug_customMessagesToRemove.Add(newPaths[i].GetOrderedNodeArray()[^1]);
-                    debug_customMessagesToRemove[^1].debug_customMessage = newPaths[i].CostSoFar.ToString("00.00") + ";" + newPaths[i].CostHeuristic.ToString("00.00") + "\n" + newPaths[i].Cost.ToString("00.00");
-#endif
                 }
             }
             else if (!newPaths[i].IsDead)
             {
                 openPaths.Enqueue(newPaths[i], pathCost);
                 UpdateNodePrice(newPaths[i].EndNode, newPaths[i].CostSoFar);
-#if UNITY_EDITOR
-                Debug.DrawLine(newPaths[i].GetOrderedNodeArray()[^2].position, newPaths[i].GetOrderedNodeArray()[^1].position, Color.red, 0.2f);
-                debug_customMessagesToRemove.Add(newPaths[i].GetOrderedNodeArray()[^1]);
-                debug_customMessagesToRemove[^1].debug_customMessage = newPaths[i].CostSoFar.ToString("00.00") + ";" + newPaths[i].CostHeuristic.ToString("00.00") + "\n" + newPaths[i].Cost.ToString("00.00");
-#endif
             }
-        }
-        yield return new WaitForSeconds(0.2f);
-        foreach (Node node in debug_customMessagesToRemove)
-        {
-            node.debug_customMessage = "";
         }
 
         pendingRequest.threads = -1; //Mark the completed request as invalid

@@ -101,8 +101,6 @@ public class NodeGraph
 
         ulong code = Card.GetCardPairID(a, b);
 
-        pinLinks[code].Release();
-        pinLinks.Remove(code);
         pendingPinLinks.Remove(code);
 
         built = false;
@@ -222,7 +220,6 @@ public class NodeGraph
             ulong key = pinLinkKeys[i];
             if (pinList.Contains(pinLinks[key]))
             {
-                Debug.Log("Adding one single pin route");
                 //We just use pinLinks[key].start because which end of the route is the start and the end is entirely arbritrary and doesn't matter
                 pinRoutes.Add(key, new SingleLinkPath(new PointedNodeLink(pinLinks[key], pinLinks[key].start)));
             }
@@ -238,9 +235,7 @@ public class NodeGraph
         //For the pins that we removed, we will also generate new nodes and links around them, by expanding the shape of the cards and using some other simple algorithms
         //This loop will break once there are no longer any missing pin-to-pin links.
 
-        List<NodeLink> missingLinks = new();
-        List<ulong> missingLinksKeys = new();
-        List<Pathfinder> missingLinksPathfinders = new();
+        List<(NodeLink, ulong)> linksToRepair = new();
 
         //QUICK AND DIRTY METHOD FOR GETTING THE DESTROYED PIN LINKS -- TO BE REWRITTEN AFTER THE WHOLE SYSTEM WORKS
         //If I do not have time to replace this I am going to be extremely upset
@@ -249,23 +244,42 @@ public class NodeGraph
             ulong key = pinLinks.Keys.ToArray()[i];
             if (!pinList.Contains(pinLinks[key]))
             {
-                missingLinks.Add(pinLinks[key]);
-                missingLinksKeys.Add(key);
+                linksToRepair.Add((pinLinks[key], key));
             }
         }
 
-        for (int i = 0; i < missingLinks.Count; i++)
+        //Sort the list of links needed to be repaired by distance, I'm pretty sure it's doing the highest distance ones first (which I'm pretty sure ends up being the best way to do it)
+        linksToRepair.OrderBy(link => link.Item1.distance);
+
+        while (linksToRepair.Count > 0)
         {
-            missingLinksPathfinders.Add(pathfinderManager.CreatePathfinder(missingLinks[i].start, missingLinks[i].end));
-            yield return missingLinksPathfinders[i];
-        }
-        /*for (int i = 0; i < missingLinksPathfinders.Count; i++)
-        {
-            yield return missingLinksPathfinders[i];
-        }*/
-        for (int i = 0; i < missingLinksPathfinders.Count; i++)
-        {
-            pinRoutes.Add(missingLinksKeys[i], missingLinksPathfinders[i].Result);
+            //Repair the first link in the list
+            Pathfinder repair = pathfinderManager.CreatePathfinder(linksToRepair[0].Item1.start, linksToRepair[0].Item1.end);
+            yield return repair;
+
+            //Add the route
+            pinRoutes.Add(linksToRepair[0].Item2, repair.Result);
+
+            //Remove the old broken link from the list of links that need repair
+            linksToRepair.RemoveAt(0);
+
+            //Get a list of NodeLinks representing the best path that the pathfinder found
+            List<NodeLink> repairResultLinks = repair.Result.ToNodeLinkList();
+
+            //Remove all the node links that this path used from the intercard link index
+            for (int i = 0; i < repairResultLinks.Count; i++)
+            {
+                //We only need to worry about releasing the links for the pathfinder.
+                //The lists of intercard links stored in this NodeGraph are not important at this point, so we won't worry about culling them.
+                //The performance impact of searching through the entire list and removing each NodeLink is far greater than the, like, 10 extra GPU threads they create otherwise.
+                repairResultLinks[i].Release();
+            }
+
+            yield return new WaitForSeconds(2);
+
+            //Destroy the intercard links that intersect with this new route
+            yield return shaderManager.DoSDCheck(repairResultLinks, intercardLinks, false);
+            yield return new WaitForSeconds(2);
         }
     }
 

@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using Unity.Collections;
 using Unity.Jobs;
+using Unity.Mathematics;
 using UnityEngine;
 
 /// <summary>
@@ -81,6 +82,10 @@ public abstract class PathFramework
         targetNode = toNode;
         path = new PointedNodeLink[pathSize];
     }
+    public List<NodeLink> ToNodeLinkList()
+    {
+        return path.Select(link => link.Link).ToList();
+    }
 }
 public class SingleLinkPath : PathFramework
 {
@@ -95,17 +100,6 @@ public class SingleLinkPath : PathFramework
 public class NavPath : PathFramework
 {
     #region Cost logic
-#if UNITY_EDITOR
-    //NOTE: THIS SHOULD NOT BE EXPOSED - DELETE LATER
-    public float CostHeuristic
-    {
-        get
-        {
-            return costHeuristic;
-        }
-    }
-#endif
-
     //Lower = more likely to find best path, will require more processing
     //  - Don't go lower than 1; 1 is garuanteed to find the shortest path as it will always be the shortest possible distance to the goal.
     //Higher = less likely to find the best path, reduce processing load
