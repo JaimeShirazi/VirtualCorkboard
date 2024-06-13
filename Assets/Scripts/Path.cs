@@ -3,7 +3,6 @@ using System.Collections.Generic;
 using System.Linq;
 using Unity.Collections;
 using Unity.Jobs;
-using Unity.Mathematics;
 using UnityEngine;
 
 /// <summary>
@@ -75,7 +74,120 @@ public abstract class PathFramework
         nodes[^1] = endNode;
         return nodes;
     }
+    const float SPACING = 0.3f;
+    public List<Node> GenerateAdjacentNodes()
+    {
+        Vector2 EdgeDirection(Card.Edge edge)
+        {
+            switch (edge)
+            {
+                case Card.Edge.North: default:
+                    return new Vector2(0, 1);
+                case Card.Edge.East:
+                    return new Vector2(1, 0);
+                case Card.Edge.South:
+                    return new Vector2(0, -1);
+                case Card.Edge.West:
+                    return new Vector2(-1, 0);
+            }
+        }
+        //I'm sure there's a better more mathematical way to do this, im just too tired right now
+        //True if its not inside the edge (the node doesn't go inside the card)
+        //Returns true by default.
+        bool EdgeBoundsComparison(int pathIndex, Vector2 target, Vector2 with)
+        {
+            if (pathIndex < 0 || pathIndex >= path.Length)
+            {
+                return true;
+            }
+            Card.Edge? edge = path[pathIndex].Link.edge;
+            switch (edge)
+            {
+                case Card.Edge.North:
+                default:
+                    Debug.Log("Checking north: target y " + target.y + " > " + with.y);
+                    return target.y > with.y;
+                case Card.Edge.East:
+                    Debug.Log("Checking east: target x " + target.x + " > " + with.x);
+                    return target.x > with.x;
+                case Card.Edge.South:
+                    Debug.Log("Checking south: target y " + target.y + " < " + with.y);
+                    return target.y < with.y;
+                case Card.Edge.West:
+                    Debug.Log("Checking west: target x " + target.x + " < " + with.x);
+                    return target.x < with.x;
+                case null:
+                    return true;
+            }
+        }
+        /*Node[] allNodes = GetOrderedNodeArray();
+        for (int i = 0; i < allNodes.Length; i++)
+        {
 
+        }*/
+
+        NodeGraph graph = endNode.graph;
+        List<Node> newNodes = new();
+        for (int i = 0; i < path.Length; i++)
+        {
+            if (path[i].Link.edge != null)
+            {
+                newNodes.Add(new Node(graph, path[i].Link.start.card,
+                    path[i].Link.start.position + EdgeDirection((Card.Edge)path[i].Link.edge) * SPACING, false, Vector2.zero));
+                newNodes.Add(new Node(graph, path[i].Link.end.card,
+                    path[i].Link.end.position + EdgeDirection((Card.Edge)path[i].Link.edge) * SPACING, false, Vector2.zero));
+            }
+            else
+            {
+                Vector2 dir = (path[i].Link.end.position - path[i].Link.start.position).normalized;
+                Vector2 perp = new Vector2(-dir.y, dir.x) * SPACING * 1.5f;
+
+                //Slide the endpoints a tiny bit closer to each other
+                Vector2 shrunkStart = path[i].Link.start.position + dir * SPACING * 0.1f;
+                Vector2 shrunkEnd = path[i].Link.end.position - dir * SPACING * 0.1f;
+
+                Vector2[] edgeNodes = new Vector2[]
+                {
+                    shrunkStart + perp,
+                    shrunkStart - perp,
+                    shrunkEnd + perp,
+                    shrunkEnd - perp
+                };
+
+                if (EdgeBoundsComparison(i - 1, edgeNodes[0], path[i].Link.start.position))
+                {
+                    newNodes.Add(new Node(graph, path[i].Link.start.card,
+                        edgeNodes[0], false, Vector2.zero));
+                }
+                if (EdgeBoundsComparison(i - 1, edgeNodes[1], path[i].Link.start.position))
+                {
+                    newNodes.Add(new Node(graph, path[i].Link.start.card,
+                        edgeNodes[1], false, Vector2.zero));
+                }
+                if (EdgeBoundsComparison(i + 1, edgeNodes[2], path[i].Link.end.position))
+                {
+                    newNodes.Add(new Node(graph, path[i].Link.end.card,
+                        edgeNodes[2], false, Vector2.zero));
+                }
+                if (EdgeBoundsComparison(i + 1, edgeNodes[3], path[i].Link.end.position))
+                {
+                    newNodes.Add(new Node(graph, path[i].Link.end.card,
+                        edgeNodes[3], false, Vector2.zero));
+                }
+            }
+            if (path[i].Link.start.expandOutwardsDir != Vector2.zero)
+            {
+                /*newNodes.Add(new Node(graph, path[i].Link.start.card,
+                    path[i].Link.start.position + path[i].Link.start.expandOutwardsDir * SPACING, false, path[i].Link.start.expandOutwardsDir));*/
+            }
+        }
+        if (endNode.expandOutwardsDir != Vector2.zero)
+        {
+            /*newNodes.Add(new Node(graph, endNode.card,
+                endNode.position + endNode.expandOutwardsDir * SPACING, false, endNode.expandOutwardsDir));*/
+        }
+        return newNodes;
+    }
     protected PathFramework(Node toNode, Node endNode, int pathSize)
     {
         this.endNode = endNode;

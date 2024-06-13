@@ -31,7 +31,11 @@ public class NodeLink
     //Leaving this public as it will be calculated by our compute shader
     public float distance;
     private readonly bool validPathway;
-    public NodeLink(Node a, Node b, bool validPathway)
+    /// <summary>
+    /// The edge that this link represents, if it does.
+    /// </summary>
+    public readonly Card.Edge? edge;
+    public NodeLink(Node a, Node b, bool validPathway, Card.Edge? edge = null)
     {
         start = a;
         end = b;
@@ -41,6 +45,7 @@ public class NodeLink
             start.AddLink(this);
             end.AddLink(this);
         }
+        this.edge = edge;
     }
     public bool IsOrigin(Node node)
     {

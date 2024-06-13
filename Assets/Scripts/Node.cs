@@ -30,7 +30,12 @@ public class Node
     /// </summary>
     public readonly NodeGraph graph;
     public readonly bool isPin;
-    public Node(NodeGraph graph, Card card, Vector2 position, bool isPin)
+
+    /// <summary>
+    /// If not zero, informs the direction that an extra node should be placed, if this node has a path go through it.
+    /// </summary>
+    public readonly Vector2 expandOutwardsDir;
+    public Node(NodeGraph graph, Card card, Vector2 position, bool isPin, Vector2 expandOutwardsDir)
     {
         nodeID = highestID; highestID++;
 
@@ -40,6 +45,8 @@ public class Node
         this.isPin = isPin;
 
         linkMap = new();
+
+        this.expandOutwardsDir = expandOutwardsDir;
     }
     private HashSet<NodeLink> linkMap;
     /// <summary>
