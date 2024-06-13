@@ -110,13 +110,13 @@ public class NodeGraphShaderManager
     /// </summary>
     private ComputeShader staticDynamicCheckShader, dynamicCheckShader, lengthShader;
     #endregion
-    public IEnumerator DoSDCheck(List<NodeLink> staticLinks, List<NodeLink> dynamicLinks)
+    public IEnumerator DoSDCheck(List<NodeLink> staticLinks, List<NodeLink> dynamicLinks, bool alignmentMatters)
     {
-        yield return RunShader(new SDIntersectCheck(staticLinks, dynamicLinks));
+        yield return RunShader(new SDIntersectCheck(staticLinks, dynamicLinks, alignmentMatters));
     }
-    public IEnumerator DoSDCheckAndAssignLengths(List<NodeLink> staticLinks, List<NodeLink> dynamicLinks)
+    public IEnumerator DoSDCheckAndAssignLengths(List<NodeLink> staticLinks, List<NodeLink> dynamicLinks, bool alignmentMatters)
     {
-        yield return RunShader(new SDIntersectAndLengthCheck(staticLinks, dynamicLinks));
+        yield return RunShader(new SDIntersectAndLengthCheck(staticLinks, dynamicLinks, alignmentMatters));
     }
     public IEnumerator DoDChecks(List<NodeLink> dynamicLinks)
     {
@@ -199,11 +199,13 @@ public class NodeGraphShaderManager
     private abstract class SDCheckBase : IntersectCheckBase
     {
         protected readonly List<NodeLink> staticLinks, dynamicLinks;
+        private readonly bool alignmentMatters;
         /// <param name="dynamicLinks">Note: The dynamic list will be directly modified by this class. If you don't want this, make a copy that you pass through.</param>
-        public SDCheckBase(List<NodeLink> staticLinks, List<NodeLink> dynamicLinks)
+        public SDCheckBase(List<NodeLink> staticLinks, List<NodeLink> dynamicLinks, bool alignmentMatters)
         {
             this.staticLinks = staticLinks;
             this.dynamicLinks = dynamicLinks;
+            this.alignmentMatters = alignmentMatters;
         }
         /// <summary>
         /// The point that divides the static and dynamic links in the linkArray.
@@ -239,6 +241,7 @@ public class NodeGraphShaderManager
             base.PrepareRunShader();
             //Assign offset to the shader
             intersectShader.SetInt("offset", offset);
+            intersectShader.SetInt("alignmentMatters", alignmentMatters ? 1 : 0);
         }
         protected IEnumerator RunSDIntersect()
         {
@@ -252,7 +255,7 @@ public class NodeGraphShaderManager
     private class SDIntersectCheck : SDCheckBase
     {
         /// <param name="dynamicLinks">Note: The dynamic list will be directly modified by this class. If you don't want this, make a copy that you pass through.</param>
-        public SDIntersectCheck(List<NodeLink> staticLinks, List<NodeLink> dynamicLinks) : base(staticLinks, dynamicLinks) { }
+        public SDIntersectCheck(List<NodeLink> staticLinks, List<NodeLink> dynamicLinks, bool alignmentMatters) : base(staticLinks, dynamicLinks, alignmentMatters) { }
         public override IEnumerator Run(NodeGraphShaderManager manager)
         {
             intersectShader = manager.staticDynamicCheckShader;
@@ -274,7 +277,7 @@ public class NodeGraphShaderManager
     private class SDIntersectAndLengthCheck : SDCheckBase
     {
         private ComputeShader lengthShader;
-        public SDIntersectAndLengthCheck(List<NodeLink> staticLinks, List<NodeLink> dynamicLinks) : base(staticLinks, dynamicLinks) { }
+        public SDIntersectAndLengthCheck(List<NodeLink> staticLinks, List<NodeLink> dynamicLinks, bool alignmentMatters) : base(staticLinks, dynamicLinks, alignmentMatters) { }
         public override IEnumerator Run(NodeGraphShaderManager manager)
         {
             intersectShader = manager.staticDynamicCheckShader;

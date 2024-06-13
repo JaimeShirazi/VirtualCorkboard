@@ -185,10 +185,8 @@ public class Card
             switch (side)
             {
                 case Edge.North: case Edge.South: default:
-                    Debug.Log("Comparing x:" + link.shape.center.x + " with " + shape.center.x);
                     return shape.center.x - link.shape.center.x;
                 case Edge.East: case Edge.West:
-                    Debug.Log("Comparing y:" + link.shape.center.y + " with " + shape.center.y);
                     return shape.center.y - link.shape.center.y;
             }
         }

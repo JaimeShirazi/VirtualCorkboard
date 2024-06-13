@@ -5,6 +5,7 @@ RWStructuredBuffer<float4> links;
 RWStructuredBuffer<int> hits;
 int offset;
 int total;
+int alignmentMatters; //0 = False, 1 = True. This should only be true when the staticLinks are card sides.
 
 float Cross(float2 a, float2 b)
 {
@@ -78,8 +79,8 @@ void CSMain (uint3 id : SV_DispatchThreadID)
     //Remove this if you want a collision detection algorithm that won't ignore lines that touch at endpoints
     bool touchedEdges = (ApproxEquals(A, C) || ApproxEquals(A, D) || ApproxEquals(B, C) || ApproxEquals(B, D));
     
-    //We also want to ignore collisions where a dynamic line's endpoint is aligned with the static line
-    bool endsAligned = (ApproxAligned(A, B, C, D) || ApproxAligned(A, B, D, C));
+    //We also want to ignore collisions where a dynamic line's endpoint is aligned with the static line, but only when alignmentMatters = 1.
+    bool endsAligned = (ApproxAligned(A, B, C, D) && alignmentMatters == 1);
     
     //If any of thense booleans are true, there was no intersection.
     bool noIntersect = (denomCheck || alphaRangeCheck || betaRangeCheck || touchedEdges || endsAligned);

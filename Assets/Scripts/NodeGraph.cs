@@ -189,7 +189,7 @@ public class NodeGraph
         List<NodeLink> staticLinks = new List<NodeLink>(cardLinks.Count + invalidCardLinks.Count);
         staticLinks.AddRange(cardLinks);
         staticLinks.AddRange(invalidCardLinks);
-        yield return shaderManager.DoSDCheckAndAssignLengths(staticLinks, intercardLinks);
+        yield return shaderManager.DoSDCheckAndAssignLengths(staticLinks, intercardLinks, true);
 
         //yield return ProcessPinLinks();
 
@@ -209,15 +209,16 @@ public class NodeGraph
         List<NodeLink> pinList = pinLinks.Values.ToList();
 
         //Cull the pin links that intersect with card edges
-        yield return shaderManager.DoSDCheck(cardLinks, pinList);
+        yield return shaderManager.DoSDCheck(cardLinks, pinList, true);
 
         //Cull the least possible pin links so that no pin links intersect with each other 
         yield return shaderManager.DoDChecks(pinList);
 
         //QUICK AND DIRTY REMOVE METHOD -- TO BE REWRITTEN AFTER THE WHOLE SYSTEM WORKS
-        for (int i = pinLinks.Keys.Count - 1; i >= 0; i--)
+        ulong[] pinLinkKeys = pinLinks.Keys.ToArray();
+        for (int i = pinLinkKeys.Length - 1; i >= 0; i--)
         {
-            ulong key = pinLinks.Keys.ToArray()[i];
+            ulong key = pinLinkKeys[i];
             if (pinList.Contains(pinLinks[key]))
             {
                 //We just use pinLinks[key].start because which end of the route is the start and the end is entirely arbritrary and doesn't matter
@@ -226,7 +227,7 @@ public class NodeGraph
         }
 
         //Remove all intercard links that intersect with the remaining pin links
-        yield return shaderManager.DoSDCheck(pinList, intercardLinks);
+        yield return shaderManager.DoSDCheck(pinList, intercardLinks, false);
 
         //We now enter a loop:
         //We branch, and use pathfinding to find the best path for each pin-to-pin link we no longer have.
@@ -235,7 +236,7 @@ public class NodeGraph
         //For the pins that we removed, we will also generate new nodes and links around them, by expanding the shape of the cards and using some other simple algorithms
         //This loop will break once there are no longer any missing pin-to-pin links.
 
-        List<NodeLink> missingLinks = new();
+        /*List<NodeLink> missingLinks = new();
         List<ulong> missingLinksKeys = new();
         List<Pathfinder> missingLinksPathfinders = new();
 
@@ -264,7 +265,7 @@ public class NodeGraph
             if (missingLinksPathfinders[i].Result == null)
                 Debug.Log("Null reference!");
             pinRoutes.Add(missingLinksKeys[i], missingLinksPathfinders[i].Result);
-        }
+        }*/
     }
 
     #region Debug functions that will be removed
