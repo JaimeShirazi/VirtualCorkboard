@@ -75,16 +75,16 @@ public abstract class PathFramework
         return nodes;
     }
 
-    protected PathFramework(Node fromNode, Node toNode, int pathSize)
+    protected PathFramework(Node toNode, Node endNode, int pathSize)
     {
-        endNode = fromNode;
+        this.endNode = endNode;
         targetNode = toNode;
         path = new PointedNodeLink[pathSize];
     }
 }
 public class SingleLinkPath : PathFramework
 {
-    public SingleLinkPath(PointedNodeLink link) : base(link.Start, link.End, 1)
+    public SingleLinkPath(PointedNodeLink link) : base(link.End, link.End, 1)
     {
         path[0] = link;
     }
@@ -96,14 +96,7 @@ public class NavPath : PathFramework
 {
     #region Cost logic
 #if UNITY_EDITOR
-    //NOTE: THESE SHOULD NOT BE EXPOSED - DELETE LATER
-    public float CostSoFar
-    {
-        get
-        {
-            return costSoFar;
-        }
-    }
+    //NOTE: THIS SHOULD NOT BE EXPOSED - DELETE LATER
     public float CostHeuristic
     {
         get
@@ -122,6 +115,16 @@ public class NavPath : PathFramework
     /// Buffering the cost so far.
     /// </summary>
     private float costSoFar;
+    /// <summary>
+    /// Pathfinders need to be able to see this so they can track the best cost-so-far for all nodes
+    /// </summary>
+    public float CostSoFar
+    {
+        get
+        {
+            return costSoFar;
+        }
+    }
     /// <summary>
     /// Buffering the heuristic cost.
     /// </summary>
@@ -179,14 +182,13 @@ public class NavPath : PathFramework
     /// </summary>
     /// <param name="fromNode">The node this path will start at.</param>
     /// <param name="toNode">The node this path wants to reach.</param>
-    public NavPath(Node fromNode, Node toNode) : base (fromNode, toNode, 0)
+    public NavPath(Node fromNode, Node toNode) : base (toNode, fromNode, 0)
     {
         //There is no cost-so-far for the inital path, so cost is calculated purely based on heuristic. This isn't even technically necessary, but the performance penalty is so negligable, we might as well for the sake of expandability.
         costHeuristic = Vector2.Distance(fromNode.position, toNode.position);
         visitedNodes = new HashSet<Node>
         {
-            fromNode,
-            toNode
+            fromNode
         };
     }
     /// <summary>
@@ -194,7 +196,7 @@ public class NavPath : PathFramework
     /// </summary>
     /// <param name="existingPath">The path to model this one on</param>
     /// <param name="nextLink">The new link to add to the path</param>
-    private NavPath(NavPath existingPath, PointedNodeLink nextLink) : base (nextLink.End, existingPath.targetNode, existingPath.path.Length + 1)
+    private NavPath(NavPath existingPath, PointedNodeLink nextLink) : base (existingPath.targetNode, nextLink.End, existingPath.path.Length + 1)
     {
         existingPath.path.CopyTo(path, 0);
         path[^1] = nextLink;
@@ -213,10 +215,10 @@ public class NavPath : PathFramework
     /// It also provides a function that will assign these heuristic costs to their respective paths, and return the now-ready paths to be added to the PriorityQueue.
     /// </summary>
     /// <returns>A struct containing a parallel Job that should be scheduled, and function to be called on completion.</returns>
-    public SplitRequest Split()
+    public SplitRequest Split(Pathfinder context)
     {
         List<NodeLink> availableLinks = endNode.Links.ToList();
-        //Cull all the links that are shouldn't be evaluated
+        //Cull all the links that shouldn't be evaluated
         for (int i = availableLinks.Count - 1; i >= 0; i--)
         {
             if (path.Length > 0)
@@ -241,6 +243,21 @@ public class NavPath : PathFramework
                 availableLinks.RemoveAt(i);
                 continue;
             }
+            //Remove paths that end at a node that the pathfinder has already ended at with a better cost-so-far
+            if (context.CheckBestNodePrice(directedLink.End) < (costSoFar + availableLinks[i].distance))
+            {
+                availableLinks.RemoveAt(i);
+                continue;
+            }
+        }
+
+        //Return empty if there are no available links left
+        if (availableLinks.Count < 1)
+        {
+            return new SplitRequest()
+            {
+                threads = 0
+            };
         }
 
         //An array of nodes generated, split off from this Path.
@@ -283,7 +300,17 @@ public class NavPath : PathFramework
     {
         public CalculateHeuristics job;
         public Func<NavPath[]> onComplete;
+        /// <summary>
+        /// Set to a number smaller than 1 to mark this SplitRequest as invalid
+        /// </summary>
         public int threads;
+        /// <summary>
+        /// Threads will be a number smaller than 1 if this SplitRequest should be considered invalid
+        /// </summary>
+        public bool IsInvalid()
+        {
+            return (threads < 1);
+        }
     }
     /// <summary>
     /// The parallel Job that calculates the heuristic cost for the given array of positions.

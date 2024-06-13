@@ -65,6 +65,37 @@ public class Pathfinder : CustomYieldInstruction
     /// A buffer that holds onto the currently executing JobHandle.
     /// </summary>
     JobHandle jobHandle;
+    /// <summary>
+    /// Tracks the best cost-so-far for every node we visit. This allows pathfinders to cull paths that end at nodes we've already visited with a better cost-so-far.
+    /// </summary>
+    private Dictionary<Node, float> bestPrice = new();
+    /// <summary>
+    /// Fetches the best cost-so-far for a given node since this pathfinder started.
+    /// </summary>
+    /// <param name="node">The target node.</param>
+    /// <returns>The best cost-so-far last time this pathfinder visited this node, or float.MaxValue if this node hasn't been visited.</returns>
+    public float CheckBestNodePrice(Node node)
+    {
+        if (bestPrice.ContainsKey(node))
+        {
+            return bestPrice[node];
+        }
+        else
+        {
+            return float.MaxValue;
+        }
+    }
+    private void UpdateNodePrice(Node node, float price)
+    {
+        if (!bestPrice.ContainsKey(node))
+        {
+            bestPrice.Add(node, price);
+        }
+        else if (bestPrice[node] > price)
+        {
+            bestPrice[node] = price;
+        }
+    }
 
     /// <summary>
     /// Takes the highest priority path, splits it, and prepares the jobs to be ran across multiple CPU threads.
@@ -73,13 +104,19 @@ public class Pathfinder : CustomYieldInstruction
     {
         //Get a SplitRequest struct from the highest priority path, representing the result of splitting that path into a bunch of new paths
         //Grab the highest priority path, split it, and hold onto the struct representing the data we will need from it.
-        DEBUG_originalPath = openPaths.Dequeue();
-        pendingRequest = DEBUG_originalPath.Split();
+        NavPath nextPath = null;
+        while (pendingRequest.IsInvalid())
+        {
+            nextPath = openPaths.Dequeue();
+            pendingRequest = nextPath.Split(this);
+        }
+
+        DEBUG_originalCost = nextPath.Cost;
 
         //Schedule the parallel Job
         jobHandle = pendingRequest.job.Schedule(pendingRequest.threads, 1);
     }
-    private NavPath DEBUG_originalPath;
+    private float DEBUG_originalCost;
     /// <summary>
     /// Ensures all the jobs are completed, and evaluates the results.
     /// </summary>
@@ -91,12 +128,14 @@ public class Pathfinder : CustomYieldInstruction
         NavPath[] newPaths = pendingRequest.onComplete();
         float bestCost = float.MaxValue;
 
-        List<Node> debug_customMessagesToRemove = new();
-        debug_customMessagesToRemove.Add(DEBUG_originalPath.GetOrderedNodeArray()[0]);
-        debug_customMessagesToRemove[^1].debug_customMessage = "Start\n" + DEBUG_originalPath.Cost.ToString("00.00");
+        List<Node> debug_customMessagesToRemove = new()
+        {
+            newPaths[0].GetOrderedNodeArray()[0]
+        };
+        debug_customMessagesToRemove[^1].debug_customMessage = "Start\n" + DEBUG_originalCost.ToString("00.00");
         for (int j = 0; j < newPaths[0].GetOrderedNodeArray().Length - 2; j++)
         {
-            Debug.DrawLine(newPaths[0].GetOrderedNodeArray()[j].position, newPaths[0].GetOrderedNodeArray()[j + 1].position, Color.green, 0.15f);
+            Debug.DrawLine(newPaths[0].GetOrderedNodeArray()[j].position, newPaths[0].GetOrderedNodeArray()[j + 1].position, Color.green, 0.2f);
         }
 
         for (int i = 0; i < newPaths.Length; i++)
@@ -111,7 +150,7 @@ public class Pathfinder : CustomYieldInstruction
                     bestPath = newPaths[i];
 
 #if UNITY_EDITOR
-                    Debug.DrawLine(newPaths[i].GetOrderedNodeArray()[^2].position, newPaths[i].GetOrderedNodeArray()[^1].position, Color.yellow, 0.15f);
+                    Debug.DrawLine(newPaths[i].GetOrderedNodeArray()[^2].position, newPaths[i].GetOrderedNodeArray()[^1].position, Color.yellow, 0.2f);
                     debug_customMessagesToRemove.Add(newPaths[i].GetOrderedNodeArray()[^1]);
                     debug_customMessagesToRemove[^1].debug_customMessage = newPaths[i].CostSoFar.ToString("00.00") + ";" + newPaths[i].CostHeuristic.ToString("00.00") + "\n" + newPaths[i].Cost.ToString("00.00");
 #endif
@@ -120,18 +159,21 @@ public class Pathfinder : CustomYieldInstruction
             else if (!newPaths[i].IsDead)
             {
                 openPaths.Enqueue(newPaths[i], pathCost);
+                UpdateNodePrice(newPaths[i].EndNode, newPaths[i].CostSoFar);
 #if UNITY_EDITOR
-                Debug.DrawLine(newPaths[i].GetOrderedNodeArray()[^2].position, newPaths[i].GetOrderedNodeArray()[^1].position, Color.red, 0.15f);
+                Debug.DrawLine(newPaths[i].GetOrderedNodeArray()[^2].position, newPaths[i].GetOrderedNodeArray()[^1].position, Color.red, 0.2f);
                 debug_customMessagesToRemove.Add(newPaths[i].GetOrderedNodeArray()[^1]);
                 debug_customMessagesToRemove[^1].debug_customMessage = newPaths[i].CostSoFar.ToString("00.00") + ";" + newPaths[i].CostHeuristic.ToString("00.00") + "\n" + newPaths[i].Cost.ToString("00.00");
 #endif
             }
         }
-        yield return new WaitForSeconds(0.15f);
+        yield return new WaitForSeconds(0.2f);
         foreach (Node node in debug_customMessagesToRemove)
         {
             node.debug_customMessage = "";
         }
+
+        pendingRequest.threads = -1; //Mark the completed request as invalid
     }
     #endregion
 }

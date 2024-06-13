@@ -222,6 +222,7 @@ public class NodeGraph
             ulong key = pinLinkKeys[i];
             if (pinList.Contains(pinLinks[key]))
             {
+                Debug.Log("Adding one single pin route");
                 //We just use pinLinks[key].start because which end of the route is the start and the end is entirely arbritrary and doesn't matter
                 pinRoutes.Add(key, new SingleLinkPath(new PointedNodeLink(pinLinks[key], pinLinks[key].start)));
             }
