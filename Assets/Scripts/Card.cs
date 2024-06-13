@@ -295,13 +295,13 @@ public class Card
                 }
 
                 //Create links between the corners of the edge and the leftmost/rightmost pin links
-                cornerLinks.Add(new NodeLink(GetFirstCornerNode(), pinNodes[linkIndexLookup[orderedListBuffer[0].thisID]]));
+                cornerLinks.Add(new NodeLink(GetFirstCornerNode(), pinNodes[linkIndexLookup[orderedListBuffer[0].thisID]], true));
                 cornerLinks[^1].distance = GetEdgeLength() / (totalPins + 1f);
-                cornerLinks.Add(new NodeLink(pinNodes[linkIndexLookup[orderedListBuffer[^1].thisID]], GetLastCornerNode()));
+                cornerLinks.Add(new NodeLink(pinNodes[linkIndexLookup[orderedListBuffer[^1].thisID]], GetLastCornerNode(), true));
                 cornerLinks[^1].distance = cornerLinks[^2].distance;
 
                 //These are generated for the sake of collision testing, not as valid pathways for strings.
-                invalidCornerLinks.Add(new NodeLink(GetFirstCornerNode(), GetLastCornerNode()));
+                invalidCornerLinks.Add(new NodeLink(GetFirstCornerNode(), GetLastCornerNode(), false));
                 //Generate the distance values for the edge anyways to avoid potential bugs if the code is modified later, i doubt this adds much overhead anyways
                 invalidCornerLinks[^1].distance = GetEdgeLength();
                 switch (edge)
@@ -317,7 +317,7 @@ public class Card
             else //if there are no pins on this side
             {
                 //Create a link along the edge of this card
-                cornerLinks.Add(new NodeLink(GetFirstCornerNode(), GetLastCornerNode()));
+                cornerLinks.Add(new NodeLink(GetFirstCornerNode(), GetLastCornerNode(), true));
                 cornerLinks[^1].distance = GetEdgeLength();
             }
         }

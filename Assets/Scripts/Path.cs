@@ -71,7 +71,7 @@ public abstract class PathFramework
         {
             nodes[i] = path[i].Start;
         }
-        nodes[^1] = path[^1].End;
+        nodes[^1] = endNode;
         return nodes;
     }
 
@@ -148,6 +148,11 @@ public class NavPath : PathFramework
     #endregion
 
     /// <summary>
+    /// Tracks all the nodes this path has visited. This is so when the path splits, we can quickly check if we have visited a node before.
+    /// </summary>
+    private HashSet<Node> visitedNodes;
+
+    /// <summary>
     /// Whether the path reaches its target.
     /// </summary>
     public bool IsComplete
@@ -178,6 +183,11 @@ public class NavPath : PathFramework
     {
         //There is no cost-so-far for the inital path, so cost is calculated purely based on heuristic. This isn't even technically necessary, but the performance penalty is so negligable, we might as well for the sake of expandability.
         costHeuristic = Vector2.Distance(fromNode.position, toNode.position);
+        visitedNodes = new HashSet<Node>
+        {
+            fromNode,
+            toNode
+        };
     }
     /// <summary>
     /// A path will call this to construct new paths based on itself, with a new link added to the path.
@@ -189,6 +199,10 @@ public class NavPath : PathFramework
         existingPath.path.CopyTo(path, 0);
         path[^1] = nextLink;
         costSoFar = existingPath.costSoFar;
+        visitedNodes = new HashSet<Node>(existingPath.visitedNodes)
+        {
+            nextLink.End
+        };
     }
     #endregion
 
@@ -217,6 +231,12 @@ public class NavPath : PathFramework
             PointedNodeLink directedLink = new PointedNodeLink(availableLinks[i], endNode);
             //Remove links that obstruct other pin nodes that we aren't aiming for
             if (directedLink.End.isPin && directedLink.End != targetNode)
+            {
+                availableLinks.RemoveAt(i);
+                continue;
+            }
+            //Remove paths that go to a node that this path has already been
+            if (visitedNodes.Contains(directedLink.End))
             {
                 availableLinks.RemoveAt(i);
                 continue;

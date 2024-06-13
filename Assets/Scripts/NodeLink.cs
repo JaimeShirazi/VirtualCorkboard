@@ -22,17 +22,25 @@ public class NodeLink
     /// </summary>
     public void Release()
     {
-        start.RemoveLink(this);
-        end.RemoveLink(this);
+        if (validPathway)
+        {
+            start.RemoveLink(this);
+            end.RemoveLink(this);
+        }
     }
     //Leaving this public as it will be calculated by our compute shader
     public float distance;
-    public NodeLink(Node a, Node b)
+    private readonly bool validPathway;
+    public NodeLink(Node a, Node b, bool validPathway)
     {
         start = a;
         end = b;
-        start.AddLink(this);
-        end.AddLink(this);
+        this.validPathway = validPathway;
+        if (validPathway)
+        {
+            start.AddLink(this);
+            end.AddLink(this);
+        }
     }
     public bool IsOrigin(Node node)
     {

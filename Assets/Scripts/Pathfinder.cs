@@ -73,11 +73,13 @@ public class Pathfinder : CustomYieldInstruction
     {
         //Get a SplitRequest struct from the highest priority path, representing the result of splitting that path into a bunch of new paths
         //Grab the highest priority path, split it, and hold onto the struct representing the data we will need from it.
-        pendingRequest = openPaths.Dequeue().Split();
+        DEBUG_originalPath = openPaths.Dequeue();
+        pendingRequest = DEBUG_originalPath.Split();
 
         //Schedule the parallel Job
         jobHandle = pendingRequest.job.Schedule(pendingRequest.threads, 1);
     }
+    private NavPath DEBUG_originalPath;
     /// <summary>
     /// Ensures all the jobs are completed, and evaluates the results.
     /// </summary>
@@ -90,11 +92,12 @@ public class Pathfinder : CustomYieldInstruction
         float bestCost = float.MaxValue;
 
         List<Node> debug_customMessagesToRemove = new();
+        debug_customMessagesToRemove.Add(DEBUG_originalPath.GetOrderedNodeArray()[0]);
+        debug_customMessagesToRemove[^1].debug_customMessage = "Start\n" + DEBUG_originalPath.Cost.ToString("00.00");
         for (int j = 0; j < newPaths[0].GetOrderedNodeArray().Length - 2; j++)
         {
             Debug.DrawLine(newPaths[0].GetOrderedNodeArray()[j].position, newPaths[0].GetOrderedNodeArray()[j + 1].position, Color.green, 0.15f);
         }
-
 
         for (int i = 0; i < newPaths.Length; i++)
         {

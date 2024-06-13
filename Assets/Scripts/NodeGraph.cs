@@ -163,7 +163,8 @@ public class NodeGraph
         {
             pinLinks.Add(pair, new NodeLink(
                 pendingPinLinks[pair].Item1.GetLinkingNode(pendingPinLinks[pair].Item2), //Get the node on the "from" card that represents the pin that will be connected to "to"
-                pendingPinLinks[pair].Item2.GetLinkingNode(pendingPinLinks[pair].Item1) //Get the node on the "to" card that represents the pin that will be connected to "from"
+                pendingPinLinks[pair].Item2.GetLinkingNode(pendingPinLinks[pair].Item1), //Get the node on the "to" card that represents the pin that will be connected to "from"
+                false //Mark this link as an invalid pathway for pathfinding
                 ));
         }
 
@@ -179,7 +180,7 @@ public class NodeGraph
                     //If they originate from different cards
                     if (nodesBuffer[a].card != nodesBuffer[b].card)
                     {
-                        intercardLinks.Add(new NodeLink(nodesBuffer[a], nodesBuffer[b]));
+                        intercardLinks.Add(new NodeLink(nodesBuffer[a], nodesBuffer[b], true));
                     }
                 }
             }
