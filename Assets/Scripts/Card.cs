@@ -36,20 +36,20 @@ public class Card
         // -- GENERATE THE CORNER NODES --
         cornerNodes = new Node[4];
         //Top left
-        cornerNodes[0] = new Node(graph, this, new Vector2(shape.xMin, shape.yMax), false, new Vector2(-0.70711f, 0.70711f));
+        cornerNodes[0] = new Node(graph, this, new Vector2(shape.xMin, shape.yMax), false, 0);
         //Top right
-        cornerNodes[1] = new Node(graph, this, new Vector2(shape.xMax, shape.yMax), false, new Vector2(0.70711f, 0.70711f));
+        cornerNodes[1] = new Node(graph, this, new Vector2(shape.xMax, shape.yMax), false, 1);
         //Bottom left
-        cornerNodes[2] = new Node(graph, this, new Vector2(shape.xMin, shape.yMin), false, new Vector2(-0.70711f, -0.70711f));
+        cornerNodes[2] = new Node(graph, this, new Vector2(shape.xMin, shape.yMin), false, 2);
         //Bottom right
-        cornerNodes[3] = new Node(graph, this, new Vector2(shape.xMax, shape.yMin), false, new Vector2(0.70711f, -0.70711f));
+        cornerNodes[3] = new Node(graph, this, new Vector2(shape.xMax, shape.yMin), false, 3);
 
         links = new();
         linksTargetEdge = new();
         cornerLinks = new();
         invalidCornerLinks = new();
     }
-    public enum Edge
+    enum Edge
     {
         North, East, South, West
     }
@@ -290,14 +290,14 @@ public class Card
                     //A value between 0 to 1 representing where along the edge this node should be distributed
                     float distribution = (currentPin + 1) / (float)(totalPins + 1);
                     //Create a new node at a position along the edge based on order
-                    pinNodes[linkIndexLookup[orderedListBuffer[^1].thisID]] = new Node(graph, this, PinPositionCalculator(edge, distribution), true, Vector2.zero);
+                    pinNodes[linkIndexLookup[orderedListBuffer[^1].thisID]] = new Node(graph, this, PinPositionCalculator(edge, distribution), true);
                     currentPin++;
                 }
 
                 //Create links between the corners of the edge and the leftmost/rightmost pin links
-                cornerLinks.Add(new NodeLink(GetFirstCornerNode(), pinNodes[linkIndexLookup[orderedListBuffer[0].thisID]], true, edge));
+                cornerLinks.Add(new NodeLink(GetFirstCornerNode(), pinNodes[linkIndexLookup[orderedListBuffer[0].thisID]], true));
                 cornerLinks[^1].distance = GetEdgeLength() / (totalPins + 1f);
-                cornerLinks.Add(new NodeLink(pinNodes[linkIndexLookup[orderedListBuffer[^1].thisID]], GetLastCornerNode(), true, edge));
+                cornerLinks.Add(new NodeLink(pinNodes[linkIndexLookup[orderedListBuffer[^1].thisID]], GetLastCornerNode(), true));
                 cornerLinks[^1].distance = cornerLinks[^2].distance;
 
                 //These are generated for the sake of collision testing, not as valid pathways for strings.
@@ -317,7 +317,7 @@ public class Card
             else //if there are no pins on this side
             {
                 //Create a link along the edge of this card
-                cornerLinks.Add(new NodeLink(GetFirstCornerNode(), GetLastCornerNode(), true, edge));
+                cornerLinks.Add(new NodeLink(GetFirstCornerNode(), GetLastCornerNode(), true));
                 cornerLinks[^1].distance = GetEdgeLength();
             }
         }

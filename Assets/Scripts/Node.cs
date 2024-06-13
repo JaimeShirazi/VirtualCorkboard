@@ -31,11 +31,37 @@ public class Node
     public readonly NodeGraph graph;
     public readonly bool isPin;
 
-    /// <summary>
-    /// If not zero, informs the direction that an extra node should be placed, if this node has a path go through it.
-    /// </summary>
-    public readonly Vector2 expandOutwardsDir;
-    public Node(NodeGraph graph, Card card, Vector2 position, bool isPin, Vector2 expandOutwardsDir)
+    // 0 ------- 1
+    // |         |
+    // 2 ------- 3
+    public readonly int corner;
+    public bool ShouldExpand
+    {
+        get
+        {
+            return corner >= 0;
+        }
+    }
+    public Vector2[] GetExpansionDirectionVectors()
+    {
+        //A degrees offset that the corner expansion vectors are from like perfectly diagonal (like parallel and perpendicular to the line given by y=x)
+        //The effective range would be 0<offset<=45
+        const float OFFSET_DEGREES = 30f;
+        float baseAngle = corner switch
+        {
+            0 => 135f,
+            1 => 45f,
+            2 => 225f,
+            3 => 315f,
+            _ => 0
+        };
+        return new Vector2[]
+        {
+            new Vector2(Mathf.Cos(Mathf.Deg2Rad * (baseAngle - OFFSET_DEGREES)), Mathf.Sin(Mathf.Deg2Rad * (baseAngle - OFFSET_DEGREES))),
+            new Vector2(Mathf.Cos(Mathf.Deg2Rad * (baseAngle + OFFSET_DEGREES)), Mathf.Sin(Mathf.Deg2Rad * (baseAngle + OFFSET_DEGREES)))
+        };
+    }
+    public Node(NodeGraph graph, Card card, Vector2 position, bool isPin, int corner = -1)
     {
         nodeID = highestID; highestID++;
 
@@ -43,10 +69,9 @@ public class Node
         this.card = card;
         this.position = position;
         this.isPin = isPin;
+        this.corner = corner;
 
         linkMap = new();
-
-        this.expandOutwardsDir = expandOutwardsDir;
     }
     private HashSet<NodeLink> linkMap;
     /// <summary>

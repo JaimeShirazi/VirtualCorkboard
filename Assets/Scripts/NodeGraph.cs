@@ -287,16 +287,25 @@ public class NodeGraph
             //Generate new nodes, strategically placed in spots that would allow new paths to run adjacent to the runs that this path used
             List<Node> newNodes = repair.Result.GenerateAdjacentNodes();
             List<NodeLink> newLinks = new();
+            //Generate intercard links between the new nodes and the existing ones
             for (int a = 0; a < newNodes.Count; a++)
             {
-                //Initialising b to a will ensure we're only evaluating pairs that haven't been evaluated yet
-                for (int b = a; b < nodesBuffer.Count; b++)
+                for (int b = 0; b < nodesBuffer.Count; b++)
                 {
                     //If they originate from different cards
                     if (newNodes[a].card != nodesBuffer[b].card)
                     {
                         newLinks.Add(new NodeLink(newNodes[a], nodesBuffer[b], true));
                     }
+                }
+            }
+            //Still gotta do the new nodes against each other
+            for (int a = 0; a < newNodes.Count; a++)
+            {
+                //Initialising b to a will ensure we're only evaluating pairs that haven't been evaluated yet
+                for (int b = a + 1; b < newNodes.Count; b++)
+                {
+                    newLinks.Add(new NodeLink(newNodes[a], newNodes[b], true));
                 }
             }
             //Use compute shaders to cull intersecting links, and calculate their lengths.
