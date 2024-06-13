@@ -44,9 +44,9 @@ public class Node
     }
     public Vector2[] GetExpansionDirectionVectors()
     {
-        //A degrees offset that the corner expansion vectors are from like perfectly diagonal (like parallel and perpendicular to the line given by y=x)
+        /*//A degrees offset that the corner expansion vectors are from like perfectly diagonal (like parallel and perpendicular to the line given by y=x)
         //The effective range would be 0<offset<=45
-        const float OFFSET_DEGREES = 30f;
+        const float OFFSET_DEGREES = 30f;*/
         float baseAngle = corner switch
         {
             0 => 135f,
@@ -57,9 +57,13 @@ public class Node
         };
         return new Vector2[]
         {
+            new Vector2(Mathf.Cos(Mathf.Deg2Rad * baseAngle), Mathf.Sin(Mathf.Deg2Rad * baseAngle))
+        };
+        /*return new Vector2[]
+        {
             new Vector2(Mathf.Cos(Mathf.Deg2Rad * (baseAngle - OFFSET_DEGREES)), Mathf.Sin(Mathf.Deg2Rad * (baseAngle - OFFSET_DEGREES))),
             new Vector2(Mathf.Cos(Mathf.Deg2Rad * (baseAngle + OFFSET_DEGREES)), Mathf.Sin(Mathf.Deg2Rad * (baseAngle + OFFSET_DEGREES)))
-        };
+        };*/
     }
     public Node(NodeGraph graph, Card card, Vector2 position, bool isPin, int corner = -1)
     {
