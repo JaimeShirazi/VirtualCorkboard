@@ -56,6 +56,11 @@ public class Card
     List<Card> links;
     List<Edge> linksTargetEdge;
     /// <summary>
+    /// Many lists share the same indexes for cards (e.g the links and pinNodes list line up perfectly), so this dictionary buffers the index for each card's ID
+    /// </summary>
+    Dictionary<int, int> linkIndexLookup = new();
+
+    /// <summary>
     /// Adds a link between this card and the given card.
     /// </summary>
     /// <param name="to">The target card.</param>
@@ -68,6 +73,9 @@ public class Card
 
         //Add the card to a buffer tracking all the cards this card has links to.
         links.Add(to);
+
+        //Buffer this card's index
+        linkIndexLookup.Add(to.thisID, links.Count - 1);
 
         dataIsStale = true; //Internally mark that this card needs its data regenerated before being read by other objects
     }
@@ -113,11 +121,11 @@ public class Card
     }
     public void RemoveLink(Card to)
     {
-        int targetIndex = links.IndexOf(to);
-        if (targetIndex < 0) return;
+        if (!linkIndexLookup.TryGetValue(to.thisID, out int targetIndex)) return;
 
         links.RemoveAt(targetIndex);
         linksTargetEdge.RemoveAt(targetIndex);
+        linkIndexLookup.Remove(to.thisID);
 
         dataIsStale = true; //Internally mark that this card needs its data regenerated before being read by other objects
     }
@@ -166,23 +174,32 @@ public class Card
     public Node GetLinkingNode(Card target)
     {
         StaleDataCheck();
-        return pinNodes[links.IndexOf(target)];
+        return pinNodes[linkIndexLookup[target.thisID]];
     }
     /// <param name="side">Which edge to get the ordered cards from</param>
     /// <returns>An ordered list of cards for the given edge (left to right or top to bottom)</returns>
-    Card[] GetOrderedLinksFromEdge(Edge side)
+    PriorityQueue<Card, float> GetOrderedLinksFromEdge(Edge side)
     {
-        //TODO: Write a function responsible for calculating which order the pins on a given edge belong on
-        Debug.LogWarning("Logic for calculating the target order for the pins on a given edge has not been implemented!");
+        float GetCost(Card link)
+        {
+            switch (side)
+            {
+                case Edge.North: case Edge.South: default:
+                    Debug.Log("Comparing x:" + link.shape.center.x + " with " + shape.center.x);
+                    return shape.center.x - link.shape.center.x;
+                case Edge.East: case Edge.West:
+                    Debug.Log("Comparing y:" + link.shape.center.y + " with " + shape.center.y);
+                    return shape.center.y - link.shape.center.y;
+            }
+        }
 
-        //temporary solution just doing it based on list order
-        List<Card> orderedLinks = new();
+        PriorityQueue<Card, float> orderedLinks = new();
         for (int i = 0; i < links.Count; i++)
         {
             if (linksTargetEdge[i] == side)
-                orderedLinks.Add(links[i]);
+                orderedLinks.Enqueue(links[i], GetCost(links[i]));
         }
-        return orderedLinks.ToArray();
+        return orderedLinks;
     }
     /// <summary>
     /// Finds the position along a given edge, given a value from 0 to 1 representing how far along
@@ -252,26 +269,32 @@ public class Card
         invalidCornerLinks.Clear();
 
         Edge[] allEdges = System.Enum.GetValues(typeof(Edge)) as Edge[];
-        Card[] orderedLinksBuffer;
+        PriorityQueue<Card, float> orderedQueueBuffer;
 
         foreach (Edge edge in allEdges)
         {
             //Get the pins on this side of the card, in the order they should be
-            orderedLinksBuffer = GetOrderedLinksFromEdge(edge);
+            orderedQueueBuffer = GetOrderedLinksFromEdge(edge);
 
-            if (orderedLinksBuffer.Length > 0) //if there are pins on this side
+            if (orderedQueueBuffer.Count > 0) //if there are pins on this side
             {
-                for (int i = 0; i < orderedLinksBuffer.Length; i++)
+                int totalPins = orderedQueueBuffer.Count;
+                int currentPin = 0;
+                List<Card> orderedListBuffer = new(); //Since we need to iterate through the entire list anyways, i figured we might as well just do it here instead of inside GetOrderedLinksFromEdge()
+                while (orderedQueueBuffer.Count > 0)
                 {
+                    orderedListBuffer.Add(orderedQueueBuffer.Dequeue());
+
                     //A value between 0 to 1 representing where along the edge this node should be distributed
-                    float distribution = (i + 1) / (float)(orderedLinksBuffer.Length + 1);
+                    float distribution = (currentPin + 1) / (float)(totalPins + 1);
                     //Create a new node at a position along the edge based on order
-                    pinNodes[links.IndexOf(orderedLinksBuffer[i])] = new Node(graph, this, PinPositionCalculator(edge, distribution), true);
+                    pinNodes[linkIndexLookup[orderedListBuffer[^1].thisID]] = new Node(graph, this, PinPositionCalculator(edge, distribution), true);
+                    currentPin++;
                 }
 
                 //Create links between the corners of the edge and the leftmost/rightmost pin links
-                cornerLinks.Add(new NodeLink(GetFirstCornerNode(edge), pinNodes[links.IndexOf(orderedLinksBuffer[0])]));
-                cornerLinks.Add(new NodeLink(pinNodes[links.IndexOf(orderedLinksBuffer[^1])], GetLastCornerNode(edge)));
+                cornerLinks.Add(new NodeLink(GetFirstCornerNode(edge), pinNodes[linkIndexLookup[orderedListBuffer[0].thisID]]));
+                cornerLinks.Add(new NodeLink(pinNodes[linkIndexLookup[orderedListBuffer[^1].thisID]], GetLastCornerNode(edge)));
 
                 //These are generated for the sake of collision testing, not as valid pathways for strings.
                 invalidCornerLinks.Add(new NodeLink(GetFirstCornerNode(edge), GetLastCornerNode(edge)));
