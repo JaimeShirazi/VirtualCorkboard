@@ -52,8 +52,10 @@ public class GraphCreator : MonoBehaviour
                 graph.AddLink(randomCards[i - 1], randomCards[i]);
             }
         }
-
-        //Small corkboard layout with a few linked cards for when I need a testing environment that doesn't change
+    }
+    //Corkboard layout for when I need a testing environment that doesn't change
+    public void CreateTestCardLayout()
+    {
         /*Card cardA = new Card(graph, new Rect(0, 0, 1, 2));
         Card cardB = new Card(graph, new Rect(2, 3, 0.8f, 3f));
         Card cardC = new Card(graph, new Rect(-4, -1, 2.3f, 1.1f));
@@ -66,6 +68,34 @@ public class GraphCreator : MonoBehaviour
         graph.AddLink(cardA, cardB);
         graph.AddLink(cardB, cardC);
         graph.AddLink(cardB, cardD);*/
+        Card cardA = new Card(graph, new Rect(1, 1, 2, 2));
+        Card cardB = new Card(graph, new Rect(1, 5, 2, 2));
+        Card cardC = new Card(graph, new Rect(1, 10, 2, 2));
+        Card cardD = new Card(graph, new Rect(1, 15, 2, 2));
+        Card cardE = new Card(graph, new Rect(1, 19, 2, 2));
+        Card cardF = new Card(graph, new Rect(8, 9, 4, 4));
+        graph.AddCard(cardA);
+        graph.AddCard(cardB);
+        graph.AddCard(cardC);
+        graph.AddCard(cardD);
+        graph.AddCard(cardE);
+        graph.AddCard(cardF);
+        graph.AddLink(cardF, cardA);
+        graph.AddLink(cardF, cardB);
+        graph.AddLink(cardF, cardC);
+        graph.AddLink(cardF, cardD);
+        graph.AddLink(cardF, cardE);
+        Card cardG = new Card(graph, new Rect(16, 5, 3, 2));
+        Card cardH = new Card(graph, new Rect(16, 9, 3, 4));
+        Card cardI = new Card(graph, new Rect(16, 15, 3, 2));
+        graph.AddCard(cardG);
+        graph.AddCard(cardH);
+        graph.AddCard(cardI);
+        graph.AddLink(cardG, cardI);
+        Card cardJ = new Card(graph, new Rect(23, 9, 3, 4));
+        graph.AddCard(cardJ);
+        graph.AddLink(cardJ, cardF);
+        graph.AddLink(cardJ, cardC);
     }
     public IEnumerator FindManyRandomPathsAsync(int amount)
     {
@@ -224,6 +254,16 @@ public class GraphCreatorEditor : Editor
                 }
             }
         }
+
+        if (GUILayout.Button("Create test layout"))
+        {
+            foreach (GraphCreator graphCreator in components)
+            {
+                graphCreator.CreateTestCardLayout();
+            }
+        }
+
+
         EditorGUILayout.Space(8);
         if (GUILayout.Button("Build graphs"))
         {
