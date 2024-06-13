@@ -226,38 +226,6 @@ public class Card
         }
     }
     /// <summary>
-    /// Used to make the code in GeneratePinsAndLinks edge-type-generic.
-    /// </summary>
-    /// <param name="edge">Which edge we need the first corner of</param>
-    /// <returns>The leftmost/topmost corner node, depending on the edge</returns>
-    Node GetFirstCornerNode(Edge edge)
-    {
-        switch (edge)
-        {
-            default:
-            case Edge.North: return cornerNodes[0];
-            case Edge.East: return cornerNodes[1];
-            case Edge.South: return cornerNodes[2];
-            case Edge.West: return cornerNodes[0];
-        }
-    }
-    /// <summary>
-    /// Used to make the code in GeneratePinsAndLinks edge-type-generic.
-    /// </summary>
-    /// <param name="edge">Which edge we need the last corner of</param>
-    /// <returns>The rightmost/bottommost corner node, depending on the edge</returns>
-    Node GetLastCornerNode(Edge edge)
-    {
-        switch (edge)
-        {
-            default:
-            case Edge.North: return cornerNodes[1];
-            case Edge.East: return cornerNodes[3];
-            case Edge.South: return cornerNodes[3];
-            case Edge.West: return cornerNodes[2];
-        }
-    }
-    /// <summary>
     /// Generates the pin nodes and links necessary
     /// </summary>
     void GeneratePinsAndLinks()
@@ -271,6 +239,42 @@ public class Card
 
         foreach (Edge edge in allEdges)
         {
+            float GetEdgeLength()
+            {
+                switch (edge)
+                {
+                    case Edge.North:
+                    case Edge.South:
+                    default:
+                        return shape.width;
+                    case Edge.East:
+                    case Edge.West:
+                        return shape.height;
+                }
+            }
+            Node GetFirstCornerNode() //Returns the topmost/leftmost node on this edge
+            {
+                switch (edge)
+                {
+                    default:
+                    case Edge.North: return cornerNodes[0];
+                    case Edge.East: return cornerNodes[1];
+                    case Edge.South: return cornerNodes[2];
+                    case Edge.West: return cornerNodes[0];
+                }
+            }
+            Node GetLastCornerNode() //Returns the bottommost/rightmost node on this edge
+            {
+                switch (edge)
+                {
+                    default:
+                    case Edge.North: return cornerNodes[1];
+                    case Edge.East: return cornerNodes[3];
+                    case Edge.South: return cornerNodes[3];
+                    case Edge.West: return cornerNodes[2];
+                }
+            }
+
             //Get the pins on this side of the card, in the order they should be
             orderedQueueBuffer = GetOrderedLinksFromEdge(edge);
 
@@ -291,12 +295,15 @@ public class Card
                 }
 
                 //Create links between the corners of the edge and the leftmost/rightmost pin links
-                cornerLinks.Add(new NodeLink(GetFirstCornerNode(edge), pinNodes[linkIndexLookup[orderedListBuffer[0].thisID]]));
-                cornerLinks.Add(new NodeLink(pinNodes[linkIndexLookup[orderedListBuffer[^1].thisID]], GetLastCornerNode(edge)));
+                cornerLinks.Add(new NodeLink(GetFirstCornerNode(), pinNodes[linkIndexLookup[orderedListBuffer[0].thisID]]));
+                cornerLinks[^1].distance = GetEdgeLength() / (totalPins + 1f);
+                cornerLinks.Add(new NodeLink(pinNodes[linkIndexLookup[orderedListBuffer[^1].thisID]], GetLastCornerNode()));
+                cornerLinks[^1].distance = cornerLinks[^2].distance;
 
                 //These are generated for the sake of collision testing, not as valid pathways for strings.
-                invalidCornerLinks.Add(new NodeLink(GetFirstCornerNode(edge), GetLastCornerNode(edge)));
+                invalidCornerLinks.Add(new NodeLink(GetFirstCornerNode(), GetLastCornerNode()));
                 //Generate the distance values for the edge anyways to avoid potential bugs if the code is modified later, i doubt this adds much overhead anyways
+                invalidCornerLinks[^1].distance = GetEdgeLength();
                 switch (edge)
                 {
                     case Edge.North: case Edge.South:
@@ -310,20 +317,8 @@ public class Card
             else //if there are no pins on this side
             {
                 //Create a link along the edge of this card
-                cornerLinks.Add(new NodeLink(GetFirstCornerNode(edge), GetLastCornerNode(edge)));
-
-                //Generate the distance values for the card edges
-                switch (edge)
-                {
-                    case Edge.North:
-                    case Edge.South:
-                        cornerLinks[^1].distance = shape.height;
-                        break;
-                    case Edge.East:
-                    case Edge.West:
-                        cornerLinks[^1].distance = shape.width;
-                        break;
-                }
+                cornerLinks.Add(new NodeLink(GetFirstCornerNode(), GetLastCornerNode()));
+                cornerLinks[^1].distance = GetEdgeLength();
             }
         }
 

@@ -95,6 +95,24 @@ public class SingleLinkPath : PathFramework
 public class NavPath : PathFramework
 {
     #region Cost logic
+#if UNITY_EDITOR
+    //NOTE: THESE SHOULD NOT BE EXPOSED - DELETE LATER
+    public float CostSoFar
+    {
+        get
+        {
+            return costSoFar;
+        }
+    }
+    public float CostHeuristic
+    {
+        get
+        {
+            return costHeuristic;
+        }
+    }
+#endif
+
     //Lower = more likely to find best path, will require more processing
     //  - Don't go lower than 1; 1 is garuanteed to find the shortest path as it will always be the shortest possible distance to the goal.
     //Higher = less likely to find the best path, reduce processing load
@@ -184,13 +202,7 @@ public class NavPath : PathFramework
     public SplitRequest Split()
     {
         List<NodeLink> availableLinks = endNode.Links.ToList();
-        //An array of nodes generated, split off from this Path.
-        NavPath[] pendingSplit = new NavPath[endNode.Links.Length - (path.Length > 0 ? 1 : 0)];
-        NativeArray<float> positions = new NativeArray<float>(pendingSplit.Length * 2 + 2, Allocator.TempJob);
-        //First 2 entries are the same, just the x and y of the end points
-        positions[0] = targetNode.position.x;
-        positions[1] = targetNode.position.y;
-        int nextIndex = 0;
+        //Cull all the links that are shouldn't be evaluated
         for (int i = availableLinks.Count - 1; i >= 0; i--)
         {
             if (path.Length > 0)
@@ -202,15 +214,29 @@ public class NavPath : PathFramework
                     continue;
                 }
             }
+            PointedNodeLink directedLink = new PointedNodeLink(availableLinks[i], endNode);
+            //Remove links that obstruct other pin nodes that we aren't aiming for
+            if (directedLink.End.isPin && directedLink.End != targetNode)
+            {
+                availableLinks.RemoveAt(i);
+                continue;
+            }
+        }
 
+        //An array of nodes generated, split off from this Path.
+        NavPath[] pendingSplit = new NavPath[availableLinks.Count];
+        NativeArray<float> positions = new NativeArray<float>(pendingSplit.Length * 2 + 2, Allocator.TempJob);
+        //First 2 entries are the same, just the x and y of the end points
+        positions[0] = targetNode.position.x;
+        positions[1] = targetNode.position.y;
+        for (int i = 0; i < availableLinks.Count; i++)
+        {
             //Add a new path that clones this path's nodes, but adds the link at availableLinks[i] to the end
             PointedNodeLink pointedBuffer = new PointedNodeLink(availableLinks[i], endNode);
-            pendingSplit[nextIndex] = new NavPath(this, pointedBuffer);
+            pendingSplit[i] = new NavPath(this, pointedBuffer);
             //Prepare the values for multithreaded processing
-            positions[(nextIndex * 2) + 2] = pointedBuffer.End.position.x;
-            positions[(nextIndex * 2) + 3] = pointedBuffer.End.position.y;
-
-            nextIndex++;
+            positions[(i * 2) + 2] = pointedBuffer.End.position.x;
+            positions[(i * 2) + 3] = pointedBuffer.End.position.y;
         }
 
         NativeArray<float> costs = new NativeArray<float>(pendingSplit.Length, Allocator.TempJob);

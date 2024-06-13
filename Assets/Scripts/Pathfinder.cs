@@ -51,10 +51,9 @@ public class Pathfinder : CustomYieldInstruction
     {
         get
         {
-            return isBusy;
+            return bestPath == null;
         }
     }
-    private bool isBusy = true;
     #endregion
 
     #region Path handling logic
@@ -82,32 +81,53 @@ public class Pathfinder : CustomYieldInstruction
     /// <summary>
     /// Ensures all the jobs are completed, and evaluates the results.
     /// </summary>
-    public void FinishJobs()
+    public System.Collections.IEnumerator FinishJobs()
     {
         //Stall the main thread if the jobs aren't all complete
         jobHandle.Complete();
         //Call the struct's onComplete function now that the job is done, and buffer the new paths we get returned
         NavPath[] newPaths = pendingRequest.onComplete();
         float bestCost = float.MaxValue;
+
+        List<Node> debug_customMessagesToRemove = new();
+        for (int j = 0; j < newPaths[0].GetOrderedNodeArray().Length - 2; j++)
+        {
+            Debug.DrawLine(newPaths[0].GetOrderedNodeArray()[j].position, newPaths[0].GetOrderedNodeArray()[j + 1].position, Color.green, 0.15f);
+        }
+
+
         for (int i = 0; i < newPaths.Length; i++)
         {
             float pathCost = newPaths[i].Cost; //Buffering cost since we'll always need it at least once, sometimes more. This will save picoseconds of processing but whatever
             if (newPaths[i].IsComplete)
             {
-                isBusy = false;
-
-                Debug.Log("No longer busy, and path cost is " + pathCost);
                 //Assign the path if it's the lowest cost
                 if (pathCost < bestCost)
                 {
                     bestCost = pathCost;
                     bestPath = newPaths[i];
+
+#if UNITY_EDITOR
+                    Debug.DrawLine(newPaths[i].GetOrderedNodeArray()[^2].position, newPaths[i].GetOrderedNodeArray()[^1].position, Color.yellow, 0.15f);
+                    debug_customMessagesToRemove.Add(newPaths[i].GetOrderedNodeArray()[^1]);
+                    debug_customMessagesToRemove[^1].debug_customMessage = newPaths[i].CostSoFar.ToString("00.00") + ";" + newPaths[i].CostHeuristic.ToString("00.00") + "\n" + newPaths[i].Cost.ToString("00.00");
+#endif
                 }
             }
             else if (!newPaths[i].IsDead)
             {
                 openPaths.Enqueue(newPaths[i], pathCost);
+#if UNITY_EDITOR
+                Debug.DrawLine(newPaths[i].GetOrderedNodeArray()[^2].position, newPaths[i].GetOrderedNodeArray()[^1].position, Color.red, 0.15f);
+                debug_customMessagesToRemove.Add(newPaths[i].GetOrderedNodeArray()[^1]);
+                debug_customMessagesToRemove[^1].debug_customMessage = newPaths[i].CostSoFar.ToString("00.00") + ";" + newPaths[i].CostHeuristic.ToString("00.00") + "\n" + newPaths[i].Cost.ToString("00.00");
+#endif
             }
+        }
+        yield return new WaitForSeconds(0.15f);
+        foreach (Node node in debug_customMessagesToRemove)
+        {
+            node.debug_customMessage = "";
         }
     }
     #endregion

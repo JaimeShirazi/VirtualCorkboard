@@ -27,25 +27,33 @@ public class PathfinderManager : MonoBehaviour
     //In a truly multithreaded workflow, we wouldn't have this problem, but since we're using C# Jobs instead of threading, we still need to sync up with the main thread.
     //This is partially against the spirit of multithreading, but it's better than nothing. I might come back at some point later and try make this even more parallel.
     const int ITERATIONS_PER_FRAME = 4;
-    void Update()
+    private void Start()
     {
-        if (activePathfinders.Count > 0)
+        StartCoroutine(FakeUpdate());
+    }
+    IEnumerator FakeUpdate()
+    {
+        while (true)
         {
-            for (int a = 0; a < ITERATIONS_PER_FRAME; a++)
+            if (activePathfinders.Count > 0)
             {
-                for (int i = activePathfinders.Count - 1; i >= 0; i--)
+                for (int a = 0; a < ITERATIONS_PER_FRAME; a++)
                 {
-                    activePathfinders[i].PrepareJobs();
-                }
-                for (int i = activePathfinders.Count - 1; i >= 0; i--)
-                {
-                    activePathfinders[i].FinishJobs();
-                    if (!activePathfinders[i].keepWaiting)
+                    for (int i = activePathfinders.Count - 1; i >= 0; i--)
                     {
-                        activePathfinders.RemoveAt(i); continue;
+                        activePathfinders[i].PrepareJobs();
+                    }
+                    for (int i = activePathfinders.Count - 1; i >= 0; i--)
+                    {
+                        yield return activePathfinders[i].FinishJobs();
+                        if (!activePathfinders[i].keepWaiting)
+                        {
+                            activePathfinders.RemoveAt(i); continue;
+                        }
                     }
                 }
             }
+            yield return null;
         }
     }
     #endregion

@@ -236,7 +236,7 @@ public class NodeGraph
         //For the pins that we removed, we will also generate new nodes and links around them, by expanding the shape of the cards and using some other simple algorithms
         //This loop will break once there are no longer any missing pin-to-pin links.
 
-        /*List<NodeLink> missingLinks = new();
+        List<NodeLink> missingLinks = new();
         List<ulong> missingLinksKeys = new();
         List<Pathfinder> missingLinksPathfinders = new();
 
@@ -255,17 +255,16 @@ public class NodeGraph
         for (int i = 0; i < missingLinks.Count; i++)
         {
             missingLinksPathfinders.Add(pathfinderManager.CreatePathfinder(missingLinks[i].start, missingLinks[i].end));
+            yield return missingLinksPathfinders[i];
         }
-        for (int i = 0; i < missingLinksPathfinders.Count; i++)
+        /*for (int i = 0; i < missingLinksPathfinders.Count; i++)
         {
-            yield return missingLinksPathfinders;
-        }
-        for (int i = 0; i < missingLinksPathfinders.Count; i++)
-        {
-            if (missingLinksPathfinders[i].Result == null)
-                Debug.Log("Null reference!");
-            pinRoutes.Add(missingLinksKeys[i], missingLinksPathfinders[i].Result);
+            yield return missingLinksPathfinders[i];
         }*/
+        for (int i = 0; i < missingLinksPathfinders.Count; i++)
+        {
+            pinRoutes.Add(missingLinksKeys[i], missingLinksPathfinders[i].Result);
+        }
     }
 
     #region Debug functions that will be removed
