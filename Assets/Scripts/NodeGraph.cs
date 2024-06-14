@@ -320,12 +320,8 @@ public class NodeGraph
 
             newPathNodes.AddRange(newNodes);
 
-            yield return new WaitForSeconds(2);
-
             //Add the new links to the intercardLink list
             intercardLinks.AddRange(newLinks);
-
-            yield return new WaitForSeconds(2);
         }
     }
 
