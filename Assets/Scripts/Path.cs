@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using Unity.Burst;
 using Unity.Collections;
 using Unity.Jobs;
 using UnityEngine;
@@ -326,6 +327,7 @@ public class NavPath : PathFramework
             return (threads < 1);
         }
     }
+    [BurstCompile]
     /// <summary>
     /// The parallel Job that calculates the heuristic cost for the given array of positions.
     /// pos[0] and pos[1] represent target.x and target.y respectively.
